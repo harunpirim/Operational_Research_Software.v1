@@ -1392,6 +1392,151 @@ with tab3:
         else:
             st.warning('Could not generate this chart. Try a different chart type.')
 
+# Tabs 5-6 and the footer are rendered before the Model Playground: its
+# guard clauses call st.stop(), which halts the whole script, and would
+# otherwise leave these tabs blank. Tab order on screen comes from st.tabs().
+with tab5:
+    st.header("🗄️ MIPLIB Cache")
+    
+    from src.storage.miplib_cache import MIPLIBCache
+    cache = MIPLIBCache()
+    
+    # Cache statistics
+    cache_stats = cache.get_cache_size()
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Cached Problems", cache_stats['num_entries'])
+    with col2:
+        st.metric("Cache Size", f"{cache_stats['size_mb']} MB")
+    with col3:
+        if cache_stats['newest_entry']:
+            from datetime import datetime
+            try:
+                newest = datetime.fromisoformat(cache_stats['newest_entry'])
+                st.metric("Last Cached", newest.strftime("%Y-%m-%d"))
+            except:
+                st.metric("Last Cached", "N/A")
+        else:
+            st.metric("Last Cached", "Empty")
+    
+    # List cached instances
+    cached_instances = cache.list_cached()
+    
+    if cached_instances:
+        st.subheader("Cached MIPLIB Instances")
+        st.markdown(f"*Showing {len(cached_instances)} cached solutions*")
+        
+        # Create a dataframe for display
+        import pandas as pd
+        df = pd.DataFrame(cached_instances)
+        
+        # Format the dataframe
+        df['solve_time'] = df['solve_time'].apply(lambda x: f"{x:.2f}s")
+        df['objective_value'] = df['objective_value'].apply(lambda x: f"{x:.6f}" if x else "N/A")
+        
+        # Format timestamp
+        def format_timestamp(ts):
+            try:
+                dt = datetime.fromisoformat(ts)
+                return dt.strftime("%Y-%m-%d %H:%M")
+            except:
+                return ts
+        
+        df['timestamp'] = df['timestamp'].apply(format_timestamp)
+        
+        # Rename columns for display
+        df = df.rename(columns={
+            'instance_name': 'Instance',
+            'model_id': 'Model ID',
+            'objective_value': 'Objective Value',
+            'solver_used': 'Solver',
+            'solve_time': 'Solve Time',
+            'timestamp': 'Cached At'
+        })
+        
+        # Display the table
+        st.dataframe(
+            df,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Instance": st.column_config.TextColumn(width="medium"),
+                "Model ID": st.column_config.TextColumn(
+                    width="small", help="Hash of the model's content"
+                ),
+                "Objective Value": st.column_config.TextColumn(width="medium"),
+                "Solver": st.column_config.TextColumn(width="small"),
+                "Solve Time": st.column_config.TextColumn(width="small"),
+                "Cached At": st.column_config.TextColumn(width="medium"),
+            }
+        )
+        
+        # Action buttons
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🗑️ Clear All Cache", type="secondary"):
+                cache.clear()
+                st.success("Cache cleared!")
+                st.rerun()
+    else:
+        st.info("No cached MIPLIB instances yet. Solve a MIPLIB problem to see cached results here.")
+
+with tab6:
+    st.header("How to Use OR Assistant")
+
+    st.markdown("""
+    ### 🎯 Getting Started
+
+    1. **Describe Your Problem**: Type a natural language description, **upload a data file** (Excel, CSV, Word, PDF, TXT, MPS), or **load a benchmark** from MIPLIB
+    2. **Select Solver**: Choose your preferred solver (or use auto-detect)
+    3. **Click Solve**: Let the AI understand, model, and solve your problem
+    4. **Review Results**: Get actionable insights and visualizations
+
+    ### 📝 Problem Types Supported
+
+    - **Linear Programming (LP)**: Optimize linear objectives with linear constraints
+    - **Integer Programming (IP)**: Optimization with discrete decision variables
+    - **Transportation**: Minimize costs of shipping goods from sources to destinations
+    - **Assignment**: Optimally match resources to tasks
+    - **Scheduling**: Sequence tasks over time to meet deadlines
+
+    ### 💡 Example Problems
+
+    **Transportation Problem:**
+    ```
+    I need to minimize transportation costs between 3 warehouses and 5 stores.
+    Warehouse capacities: [100, 150, 120]
+    Store demands: [80, 90, 60, 70, 50]
+    Costs per unit: [cost matrix here]
+    ```
+
+    **Production Planning:**
+    ```
+    Maximize profit from producing 3 products using 2 machines.
+    Machine 1 has 480 hours available, Machine 2 has 380 hours.
+    Product A: 8 hours on M1, 4 hours on M2, profit $50
+    [continue with other products...]
+    ```
+
+    ### ⚙️ Tips for Best Results
+
+    - Be specific about constraints and objectives
+    - Include all numerical data
+    - Clearly state what you want to minimize or maximize
+    - Mention any special requirements (integer values, time windows, etc.)
+
+    ### 🆘 Need Help?
+
+    - Check the [Documentation](docs/USER_GUIDE.md)
+    - See [Examples](data/examples/)
+    - Open an issue on GitHub
+    """)
+
+# Footer
+st.divider()
+st.caption("OR Assistant v0.1.0 | Built with AI & Streamlit | NDSU Project")
+
+
 # =====================================================================
 #  TAB 4 — Model Playground
 # =====================================================================
@@ -1927,144 +2072,3 @@ with tab4:
                 )
             else:
                 st.info("Not enough feasible points to compute a shadow price.")
-
-with tab5:
-    st.header("🗄️ MIPLIB Cache")
-    
-    from src.storage.miplib_cache import MIPLIBCache
-    cache = MIPLIBCache()
-    
-    # Cache statistics
-    cache_stats = cache.get_cache_size()
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Cached Problems", cache_stats['num_entries'])
-    with col2:
-        st.metric("Cache Size", f"{cache_stats['size_mb']} MB")
-    with col3:
-        if cache_stats['newest_entry']:
-            from datetime import datetime
-            try:
-                newest = datetime.fromisoformat(cache_stats['newest_entry'])
-                st.metric("Last Cached", newest.strftime("%Y-%m-%d"))
-            except:
-                st.metric("Last Cached", "N/A")
-        else:
-            st.metric("Last Cached", "Empty")
-    
-    # List cached instances
-    cached_instances = cache.list_cached()
-    
-    if cached_instances:
-        st.subheader("Cached MIPLIB Instances")
-        st.markdown(f"*Showing {len(cached_instances)} cached solutions*")
-        
-        # Create a dataframe for display
-        import pandas as pd
-        df = pd.DataFrame(cached_instances)
-        
-        # Format the dataframe
-        df['solve_time'] = df['solve_time'].apply(lambda x: f"{x:.2f}s")
-        df['objective_value'] = df['objective_value'].apply(lambda x: f"{x:.6f}" if x else "N/A")
-        
-        # Format timestamp
-        def format_timestamp(ts):
-            try:
-                dt = datetime.fromisoformat(ts)
-                return dt.strftime("%Y-%m-%d %H:%M")
-            except:
-                return ts
-        
-        df['timestamp'] = df['timestamp'].apply(format_timestamp)
-        
-        # Rename columns for display
-        df = df.rename(columns={
-            'instance_name': 'Instance',
-            'model_id': 'Model ID',
-            'objective_value': 'Objective Value',
-            'solver_used': 'Solver',
-            'solve_time': 'Solve Time',
-            'timestamp': 'Cached At'
-        })
-        
-        # Display the table
-        st.dataframe(
-            df,
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "Instance": st.column_config.TextColumn(width="medium"),
-                "Model ID": st.column_config.TextColumn(
-                    width="small", help="Hash of the model's content"
-                ),
-                "Objective Value": st.column_config.TextColumn(width="medium"),
-                "Solver": st.column_config.TextColumn(width="small"),
-                "Solve Time": st.column_config.TextColumn(width="small"),
-                "Cached At": st.column_config.TextColumn(width="medium"),
-            }
-        )
-        
-        # Action buttons
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🗑️ Clear All Cache", type="secondary"):
-                cache.clear()
-                st.success("Cache cleared!")
-                st.rerun()
-    else:
-        st.info("No cached MIPLIB instances yet. Solve a MIPLIB problem to see cached results here.")
-
-with tab6:
-    st.header("How to Use OR Assistant")
-
-    st.markdown("""
-    ### 🎯 Getting Started
-
-    1. **Describe Your Problem**: Type a natural language description, **upload a data file** (Excel, CSV, Word, PDF, TXT, MPS), or **load a benchmark** from MIPLIB
-    2. **Select Solver**: Choose your preferred solver (or use auto-detect)
-    3. **Click Solve**: Let the AI understand, model, and solve your problem
-    4. **Review Results**: Get actionable insights and visualizations
-
-    ### 📝 Problem Types Supported
-
-    - **Linear Programming (LP)**: Optimize linear objectives with linear constraints
-    - **Integer Programming (IP)**: Optimization with discrete decision variables
-    - **Transportation**: Minimize costs of shipping goods from sources to destinations
-    - **Assignment**: Optimally match resources to tasks
-    - **Scheduling**: Sequence tasks over time to meet deadlines
-
-    ### 💡 Example Problems
-
-    **Transportation Problem:**
-    ```
-    I need to minimize transportation costs between 3 warehouses and 5 stores.
-    Warehouse capacities: [100, 150, 120]
-    Store demands: [80, 90, 60, 70, 50]
-    Costs per unit: [cost matrix here]
-    ```
-
-    **Production Planning:**
-    ```
-    Maximize profit from producing 3 products using 2 machines.
-    Machine 1 has 480 hours available, Machine 2 has 380 hours.
-    Product A: 8 hours on M1, 4 hours on M2, profit $50
-    [continue with other products...]
-    ```
-
-    ### ⚙️ Tips for Best Results
-
-    - Be specific about constraints and objectives
-    - Include all numerical data
-    - Clearly state what you want to minimize or maximize
-    - Mention any special requirements (integer values, time windows, etc.)
-
-    ### 🆘 Need Help?
-
-    - Check the [Documentation](docs/USER_GUIDE.md)
-    - See [Examples](data/examples/)
-    - Open an issue on GitHub
-    """)
-
-# Footer
-st.divider()
-st.caption("OR Assistant v0.1.0 | Built with AI & Streamlit | NDSU Project")
