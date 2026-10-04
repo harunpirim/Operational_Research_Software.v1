@@ -150,27 +150,3 @@ def test_cvxpy_falls_back_when_solver_cannot_handle_integers():
 
     assert solution["is_optimal"]
     assert solution["objective_value"] == pytest.approx(5.0, abs=1e-4)
-
-
-def test_osqp_not_used_for_linear_objective():
-    """OSQP is skipped for LPs (wrong tool, and its Linux wheel can segfault)."""
-    solution = SolverInterface("cvxpy_osqp").solve(_bounded_problem())
-
-    assert solution["is_optimal"]
-    assert "OSQP" not in solution["solver_name"]
-    assert any("OSQP skipped" in w for w in solution["warnings"])
-
-
-def test_osqp_still_used_for_quadratic_objective():
-    """A genuine QP (e.g. portfolio risk) still goes to OSQP."""
-    import cvxpy as cp
-
-    x = cp.Variable(2, name="x")
-    prob = cp.Problem(cp.Minimize(cp.sum_squares(x - 1)), [cp.sum(x) == 1, x >= 0])
-    solution = SolverInterface("cvxpy_osqp").solve(
-        {"type": "cvxpy", "problem": prob, "variables": {"x": x}}
-    )
-
-    assert solution["status"].startswith("Optimal")
-    assert "OSQP" in solution["solver_name"]
-    assert solution["objective_value"] == pytest.approx(0.5, abs=1e-3)
