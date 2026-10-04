@@ -348,9 +348,9 @@ with st.sidebar:
             df = df[['instance_name', 'objective_value', 'solver_used', 'timestamp']]
             df.columns = ['Instance', 'Objective', 'Solver', 'Date']
             
-            st.dataframe(df, use_container_width=True, hide_index=True, height=200)
+            st.dataframe(df, width="stretch", hide_index=True, height=200)
             
-            if st.button("Clear Cache", type="secondary", use_container_width=True):
+            if st.button("Clear Cache", type="secondary", width="stretch"):
                 cache.clear()
                 st.rerun()
         else:
@@ -445,7 +445,7 @@ with tab1:
                             _pv_df = pd.read_csv(_io.BytesIO(_preview_bytes))
                         else:
                             _pv_df = pd.read_excel(_io.BytesIO(_preview_bytes))
-                        st.dataframe(_pv_df.head(10), use_container_width=True)
+                        st.dataframe(_pv_df.head(10), width="stretch")
                         st.caption(f"{len(_pv_df)} rows × {len(_pv_df.columns)} columns")
                     except Exception as _prev_err:
                         st.text(f"Could not preview: {_prev_err}")
@@ -473,7 +473,7 @@ with tab1:
         _miplib_instance = _custom.strip() if _custom.strip() else _rec_instance
 
         _miplib_load_clicked = st.button(
-            "📦 Load from MIPLIB", type="primary", use_container_width=True,
+            "📦 Load from MIPLIB", type="primary", width="stretch",
         )
 
         # --- Browse MIPLIB expander -------------------------------------
@@ -521,10 +521,10 @@ with tab1:
     col1, col2, _ = st.columns([1, 1, 2])
 
     with col1:
-        solve_button = st.button("🚀 Solve Problem", type="primary", use_container_width=True)
+        solve_button = st.button("🚀 Solve Problem", type="primary", width="stretch")
 
     with col2:
-        clear_button = st.button("🗑️ Clear", use_container_width=True)
+        clear_button = st.button("🗑️ Clear", width="stretch")
 
     _pipeline_ready = False
     _mps_direct = False  # True when MPS data bypasses Step 2 AI generation
@@ -1162,7 +1162,7 @@ with tab2:
                 }
                 for k, v in variables.items()
             ])
-            st.dataframe(df_vars, use_container_width=True, hide_index=True)
+            st.dataframe(df_vars, width="stretch", hide_index=True)
             st.download_button(
                 "📥 Download Results (CSV)",
                 df_vars.to_csv(index=False),
@@ -1193,7 +1193,7 @@ with tab2:
                     }
                     for name, price in shadow.items()
                 ])
-                st.dataframe(df_shadow, use_container_width=True, hide_index=True)
+                st.dataframe(df_shadow, width="stretch", hide_index=True)
 
             reduced = sensitivity.get('reduced_costs', {})
             if reduced:
@@ -1205,7 +1205,7 @@ with tab2:
                     }
                     for name, rc in reduced.items()
                 ])
-                st.dataframe(df_rc, use_container_width=True, hide_index=True)
+                st.dataframe(df_rc, width="stretch", hide_index=True)
     else:
         st.info("👈 Solve a problem to see results here")
 
@@ -1376,7 +1376,7 @@ with tab3:
         
         # --- render chart or show helpful message -------------------------
         if fig is not None:
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             
             c1, c2, _ = st.columns([1, 1, 2])
             with c1:
@@ -1427,7 +1427,7 @@ with tab4:
         ]
         for _col, (_label, _tkey) in zip(_tpl_cols, _tpl_names):
             with _col:
-                if st.button(_label, key=f"tpl_{_tkey}", use_container_width=True):
+                if st.button(_label, key=f"tpl_{_tkey}", width="stretch"):
                     st.session_state.playground_original_state = get_or_template(_tkey)
                     st.session_state.playground_original_solution = None
                     st.rerun()
@@ -1479,7 +1479,7 @@ with tab4:
                     'Lower Bound': _lb,
                     'Upper Bound': _ub,
                 })
-            st.dataframe(pd.DataFrame(_var_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_var_rows), width="stretch", hide_index=True)
 
         # Show current solution values if available
         _orig_sol = st.session_state.get('playground_original_solution')
@@ -1488,7 +1488,7 @@ with tab4:
             _sol_rows = []
             for _vname, _vval in _orig_sol['variable_values'].items():
                 _sol_rows.append({'Variable': _vname, 'Value': _vval})
-            st.dataframe(pd.DataFrame(_sol_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_sol_rows), width="stretch", hide_index=True)
             _obj_val = _orig_sol.get('objective_value')
             if _obj_val is not None:
                 st.metric("Objective Value", f"{_obj_val:,.4f}")
@@ -1561,7 +1561,7 @@ with tab4:
                         key=f"pg_con_rhs_{_ci}", step=1.0,
                     )
                     _rhs_submitted = st.form_submit_button(
-                        "✅ Apply RHS Change", use_container_width=True,
+                        "✅ Apply RHS Change", width="stretch",
                     )
                 if _rhs_submitted:
                     _con['rhs'] = _form_rhs
@@ -1642,7 +1642,7 @@ with tab4:
                 }
 
             _vars_submitted = st.form_submit_button(
-                "✅ Apply Variable Changes", use_container_width=True,
+                "✅ Apply Variable Changes", width="stretch",
             )
 
         if _vars_submitted:
@@ -1693,16 +1693,16 @@ with tab4:
         with _act_cols[0]:
             _solve_edited = st.button(
                 "🚀 Solve Edited Model", type="primary", key="pg_solve",
-                use_container_width=True,
+                width="stretch",
             )
         with _act_cols[1]:
-            if st.button("👁️ Preview as LaTeX", key="pg_preview", use_container_width=True):
+            if st.button("👁️ Preview as LaTeX", key="pg_preview", width="stretch"):
                 st.markdown("**Objective:**")
                 st.latex(_pg_edit.get('objective_latex', ''))
                 for _con in _pg_edit.get('constraints', []):
                     st.latex(_con.get('latex', ''))
         with _act_cols[2]:
-            if st.button("🔄 Reset to Original", key="pg_reset", use_container_width=True):
+            if st.button("🔄 Reset to Original", key="pg_reset", width="stretch"):
                 st.session_state.playground_editor_state = deepcopy(
                     st.session_state.playground_original_state
                 )
@@ -1784,7 +1784,7 @@ with tab4:
                     })
                 st.dataframe(
                     pd.DataFrame(_cmp_rows),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 
@@ -1844,7 +1844,7 @@ with tab4:
                     key="pg_sweep_n", step=1,
                 )
             _sweep_submitted = st.form_submit_button(
-                "🔍 Run Sweep", type="primary", use_container_width=True,
+                "🔍 Run Sweep", type="primary", width="stretch",
             )
 
         if _sweep_submitted:
@@ -1904,7 +1904,7 @@ with tab4:
                 x=_current_rhs, line_dash="dash", line_color="red",
                 annotation_text=f"Current: {_current_rhs}",
             )
-            st.plotly_chart(_fig, use_container_width=True)
+            st.plotly_chart(_fig, width="stretch")
 
             # Shadow price approximation
             import numpy as np
@@ -1988,7 +1988,7 @@ with tab5:
         # Display the table
         st.dataframe(
             df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "Instance": st.column_config.TextColumn(width="medium"),
