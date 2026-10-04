@@ -345,8 +345,8 @@ with st.sidebar:
             df['timestamp'] = df['timestamp'].apply(lambda ts: ts.split('T')[0] if 'T' in ts else ts)
             
             # Select and rename columns
-            df = df[['instance_name', 'objective_value', 'solver_used', 'timestamp']]
-            df.columns = ['Instance', 'Objective', 'Solver', 'Date']
+            df = df[['instance_name', 'model_id', 'objective_value', 'solver_used', 'timestamp']]
+            df.columns = ['Instance', 'ID', 'Objective', 'Solver', 'Date']
             
             st.dataframe(df, width="stretch", hide_index=True, height=200)
             
@@ -660,6 +660,7 @@ with tab1:
                 # MPS files are already fully parsed — bypass AI DataExtractor entirely.
                 # DataExtractor ignores structured MPS data and its defaults hardcode 'minimize'.
                 if parsed.get('type') == 'mps':
+                    parsed['source'] = 'mps_upload'  # kept by generate_from_mps()
                     n_vars = parsed.get('num_variables', 0)
                     n_cons = parsed.get('num_constraints', 0)
                     vbounds = parsed.get('variable_bounds', {})
@@ -1979,6 +1980,7 @@ with tab5:
         # Rename columns for display
         df = df.rename(columns={
             'instance_name': 'Instance',
+            'model_id': 'Model ID',
             'objective_value': 'Objective Value',
             'solver_used': 'Solver',
             'solve_time': 'Solve Time',
@@ -1992,6 +1994,9 @@ with tab5:
             hide_index=True,
             column_config={
                 "Instance": st.column_config.TextColumn(width="medium"),
+                "Model ID": st.column_config.TextColumn(
+                    width="small", help="Hash of the model's content"
+                ),
                 "Objective Value": st.column_config.TextColumn(width="medium"),
                 "Solver": st.column_config.TextColumn(width="small"),
                 "Solve Time": st.column_config.TextColumn(width="small"),

@@ -116,6 +116,8 @@ class MIPLIBLoader:
             filename=f"{instance_name}.mps.gz",
         )
         result["file_path"] = str(local_path)
+        result["source"] = "miplib"
+        result["instance_name"] = instance_name
         return result
 
     def get_instance_info(self, instance_name: str) -> Dict[str, Any]:

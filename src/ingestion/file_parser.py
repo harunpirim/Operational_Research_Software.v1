@@ -6,6 +6,7 @@ plain text (.txt), PDF, and MPS (.mps/.mps.gz).
 """
 
 import gzip
+import hashlib
 import io
 import warnings
 from pathlib import Path
@@ -73,6 +74,11 @@ class FileParser:
 
             if isinstance(file_path_or_bytes, (str, Path)):
                 result["file_path"] = str(file_path_or_bytes)
+
+            if result.get("type") == "mps":
+                # Identifies the model itself (the NAME line is often generic),
+                # so .mps and .mps.gz copies of one model share an id.
+                result["content_sha256"] = hashlib.sha256(data).hexdigest()
 
             return result
 

@@ -1680,8 +1680,13 @@ class ModelGenerator:
                 f"{_obj_sense.capitalize()} {parsed_mps.get('objective_name', '?')} "
                 f"(MPS benchmark)"
             ),
-            "source": "miplib",
-            "instance_name": parsed_mps.get("name", ""),
+            # 'miplib' only for genuine MIPLIB downloads (set by MIPLIBLoader);
+            # uploads and local files keep their own source.
+            "source": parsed_mps.get("source", "mps_file"),
+            "instance_name": parsed_mps.get("instance_name")
+            or parsed_mps.get("name", ""),
+            # Solution-cache key: hash of the model content, not its NAME line.
+            "cache_key": parsed_mps.get("content_sha256"),
             "mps_file_path": file_path,
             "confidence": 1.0,
             "assumptions": [],

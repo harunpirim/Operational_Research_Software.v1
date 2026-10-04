@@ -79,14 +79,28 @@ class SolverInterface:
     @property
     def will_use_cache(self) -> bool:
         """Check if this solve will use cached results."""
-        if self.problem_data.get("source") == "miplib":
-            instance_name = self.problem_data.get("instance_name")
-            if instance_name:
-                from src.storage.miplib_cache import MIPLIBCache
+        return self._cached_solution() is not None
 
-                cache = MIPLIBCache()
-                return cache.get(instance_name) is not None
-        return False
+    def _cached_solution(self) -> Optional[Dict[str, Any]]:
+        """
+        Return a usable cached solution for this model, or None.
+
+        Models are identified by ``cache_key`` (a hash of the MPS content), so
+        two different models that share a NAME never share a cached solution.
+        A cached solution is only reused for the same solver family (PuLP vs
+        CVXPY), since switching families is a request to solve fresh.
+        """
+        cache_key = self.problem_data.get("cache_key")
+        if not cache_key:
+            return None
+        from src.storage.miplib_cache import MIPLIBCache
+
+        cached = MIPLIBCache().get(cache_key)
+        if not cached:
+            return None
+        cached_is_cvxpy = "cvxpy" in cached.get("solver_name", "").lower()
+        current_is_cvxpy = self.original_solver_type.startswith("cvxpy")
+        return cached if cached_is_cvxpy == current_is_cvxpy else None
 
     def _initialize_solver(self):
         """Initialize the appropriate solver."""
@@ -206,20 +220,20 @@ class SolverInterface:
         return base
 
     def _maybe_cache_and_return(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Cache MIPLIB solutions before returning."""
-        # Only cache successful MIPLIB solutions
+        """Cache optimal solutions of MPS models before returning."""
+        cache_key = self.problem_data.get("cache_key")
         if (
-            self.problem_data.get("source") == "miplib"
+            cache_key
             and result.get("is_optimal")
-            and "cache_metadata" not in result
-        ):  # Don't re-cache cached results
+            and "cache_metadata" not in result  # don't re-cache cached results
+        ):
+            from src.storage.miplib_cache import MIPLIBCache
 
-            instance_name = self.problem_data.get("instance_name")
-            if instance_name:
-                from src.storage.miplib_cache import MIPLIBCache
-
-                cache = MIPLIBCache()
-                cache.set(instance_name, result)
+            MIPLIBCache().set(
+                cache_key,
+                result,
+                instance_name=self.problem_data.get("instance_name", ""),
+            )
 
         return result
 
@@ -259,24 +273,10 @@ class SolverInterface:
             variables, num_variables, num_constraints, solve_time,
             solver_name, warnings, error_message.
         """
-        # Check MIPLIB cache first
-        from src.storage.miplib_cache import MIPLIBCache
-
-        if self.problem_data.get("source") == "miplib":
-            instance_name = self.problem_data.get("instance_name")
-            if instance_name:
-                cache = MIPLIBCache()
-                cached_solution = cache.get(instance_name)
-                if cached_solution:
-                    # Only use cache if we're solving with the same solver type
-                    # This prevents errors when switching between PuLP and CVXPY
-                    cached_solver = cached_solution.get("solver_name", "").lower()
-                    current_is_cvxpy = self.original_solver_type.startswith("cvxpy")
-                    cached_is_cvxpy = "cvxpy" in cached_solver
-
-                    if current_is_cvxpy == cached_is_cvxpy:
-                        return cached_solution
-                    # Otherwise, solve fresh with the new solver
+        # Reuse a cached solution of this exact model, if any
+        cached_solution = self._cached_solution()
+        if cached_solution is not None:
+            return cached_solution
 
         # The solver has already been resolved by app.py
         resolved_key = self.original_solver_type

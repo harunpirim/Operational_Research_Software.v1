@@ -4,6 +4,11 @@ MIPLIB Cache Module
 This module handles caching of MIPLIB problem solutions in a separate SQLite database.
 It provides fast retrieval of previously solved MIPLIB instances to avoid redundant
 computation of benchmark problems.
+
+Entries are keyed by a hash of the model's content (``cache_key``), not by its
+name: the MPS NAME line is often generic, so name-keyed entries could serve one
+model's solution for another. The original name-keyed ``miplib_cache`` table is
+left in place but no longer read.
 """
 
 import sqlite3
@@ -11,6 +16,8 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+
+_TABLE = "mps_solution_cache"
 
 
 class MIPLIBCache:
@@ -38,9 +45,10 @@ class MIPLIBCache:
     def _create_table(self):
         """Create the cache table if it doesn't exist."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS miplib_cache (
-                    instance_name TEXT PRIMARY KEY,
+            conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {_TABLE} (
+                    cache_key TEXT PRIMARY KEY,
+                    instance_name TEXT,
                     objective_value REAL,
                     solution_json TEXT,
                     solver_used TEXT,
@@ -50,12 +58,12 @@ class MIPLIBCache:
             """)
             conn.commit()
 
-    def get(self, instance_name: str) -> Optional[Dict[str, Any]]:
+    def get(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve a cached solution for a MIPLIB instance.
+        Retrieve a cached solution for a model.
 
         Args:
-            instance_name: Name of the MIPLIB instance
+            cache_key: Content hash of the model (``content_sha256`` from FileParser)
 
         Returns:
             Solution dict with added cache_metadata, or None if not found
@@ -63,7 +71,7 @@ class MIPLIBCache:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT * FROM miplib_cache WHERE instance_name = ?", (instance_name,)
+                f"SELECT * FROM {_TABLE} WHERE cache_key = ?", (cache_key,)
             )
             row = cursor.fetchone()
 
@@ -81,7 +89,7 @@ class MIPLIBCache:
             "original_solve_time": row["original_solve_time"],
             "solver_used": row["solver_used"],
             "timestamp": row["timestamp"],
-            "instance_name": instance_name,
+            "instance_name": row["instance_name"],
         }
 
         # Update status to indicate it came from cache
@@ -89,15 +97,16 @@ class MIPLIBCache:
 
         return solution
 
-    def set(self, instance_name: str, solution: Dict[str, Any]):
+    def set(self, cache_key: str, solution: Dict[str, Any], instance_name: str = ""):
         """
         Save a solution to the cache.
 
         Uses INSERT OR REPLACE to update existing entries.
 
         Args:
-            instance_name: Name of the MIPLIB instance
+            cache_key: Content hash of the model (``content_sha256`` from FileParser)
             solution: Solution dictionary to cache
+            instance_name: Display name of the model (not used for lookup)
         """
         # Extract relevant fields
         objective_value = solution.get("objective_value")
@@ -111,13 +120,14 @@ class MIPLIBCache:
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """
-                INSERT OR REPLACE INTO miplib_cache
-                (instance_name, objective_value, solution_json, solver_used,
+                f"""
+                INSERT OR REPLACE INTO {_TABLE}
+                (cache_key, instance_name, objective_value, solution_json, solver_used,
                  original_solve_time, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
                 (
+                    cache_key,
                     instance_name,
                     objective_value,
                     solution_json,
@@ -131,7 +141,7 @@ class MIPLIBCache:
     def clear(self):
         """Delete all cached entries."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("DELETE FROM miplib_cache")
+            conn.execute(f"DELETE FROM {_TABLE}")
             conn.commit()
 
     def list_cached(self) -> List[Dict[str, Any]]:
@@ -143,10 +153,10 @@ class MIPLIBCache:
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                SELECT instance_name, objective_value, solver_used,
+            cursor = conn.execute(f"""
+                SELECT cache_key, instance_name, objective_value, solver_used,
                        original_solve_time, timestamp
-                FROM miplib_cache
+                FROM {_TABLE}
                 ORDER BY timestamp DESC
             """)
             rows = cursor.fetchall()
@@ -154,6 +164,8 @@ class MIPLIBCache:
         return [
             {
                 "instance_name": row["instance_name"],
+                # Short content id, so two models with the same name are distinguishable
+                "model_id": row["cache_key"][:8],
                 "objective_value": row["objective_value"],
                 "solver_used": row["solver_used"],
                 "solve_time": row["original_solve_time"],
@@ -171,7 +183,7 @@ class MIPLIBCache:
         """
         with sqlite3.connect(self.db_path) as conn:
             # Count entries
-            count = conn.execute("SELECT COUNT(*) FROM miplib_cache").fetchone()[0]
+            count = conn.execute(f"SELECT COUNT(*) FROM {_TABLE}").fetchone()[0]
 
             # Get database file size
             try:
@@ -181,9 +193,9 @@ class MIPLIBCache:
                 size_mb = 0
 
             # Get date range
-            cursor = conn.execute("""
+            cursor = conn.execute(f"""
                 SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest
-                FROM miplib_cache
+                FROM {_TABLE}
             """)
             row = cursor.fetchone()
             oldest = row[0] if row and row[0] else None
