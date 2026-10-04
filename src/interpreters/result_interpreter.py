@@ -48,7 +48,7 @@ class ResultInterpreter:
         last = text.rfind("}")
         if first != -1 and last != -1 and last > first:
             try:
-                return json.loads(text[first:last + 1])
+                return json.loads(text[first : last + 1])
             except json.JSONDecodeError:
                 pass
 
@@ -69,7 +69,7 @@ class ResultInterpreter:
         Returns a dict with keys: summary, key_findings, recommendations,
         warnings, business_impact.
         """
-        if not solution.get('is_optimal', False):
+        if not solution.get("is_optimal", False):
             return self._fallback_interpret(solution, problem_data)
 
         prompt = self._build_prompt(solution, problem_data)
@@ -80,7 +80,7 @@ class ResultInterpreter:
                 max_tokens=2048,
                 temperature=0.4,
             )
-            return self._parse_json(response['content'])
+            return self._parse_json(response["content"])
 
         except Exception:
             return self._fallback_interpret(solution, problem_data)
@@ -93,8 +93,7 @@ class ResultInterpreter:
     def _top_nonzero(variables: Dict[str, Any], limit: int = 10) -> Dict[str, Any]:
         """Return the top *limit* non-zero variable values."""
         nonzero = {
-            k: v for k, v in variables.items()
-            if v is not None and abs(v) > 1e-8
+            k: v for k, v in variables.items() if v is not None and abs(v) > 1e-8
         }
         return dict(list(nonzero.items())[:limit])
 
@@ -103,19 +102,19 @@ class ResultInterpreter:
         solution: Dict[str, Any],
         problem_data: Dict[str, Any],
     ) -> str:
-        top_vars = self._top_nonzero(solution.get('variables', {}))
-        
+        top_vars = self._top_nonzero(solution.get("variables", {}))
+
         # For knapsack problems, enhance variable names with actual item names
-        if problem_data.get('problem_type') == 'knapsack':
-            params = problem_data.get('parameters', {})
-            item_names = params.get('item_names') or params.get('project_names')
+        if problem_data.get("problem_type") == "knapsack":
+            params = problem_data.get("parameters", {})
+            item_names = params.get("item_names") or params.get("project_names")
             if item_names:
                 enhanced_vars = {}
                 for var_name, value in top_vars.items():
                     # Extract index from variable name (e.g., 'item_0' -> 0)
                     try:
-                        if var_name.startswith('item_'):
-                            idx = int(var_name.split('_')[1])
+                        if var_name.startswith("item_"):
+                            idx = int(var_name.split("_")[1])
                             if 0 <= idx < len(item_names):
                                 enhanced_vars[f"{var_name} ({item_names[idx]})"] = value
                             else:
@@ -125,7 +124,7 @@ class ResultInterpreter:
                     except (ValueError, IndexError):
                         enhanced_vars[var_name] = value
                 top_vars = enhanced_vars
-        
+
         vars_json = json.dumps(top_vars, indent=2, default=str)
 
         return (
@@ -159,9 +158,9 @@ class ResultInterpreter:
         problem_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Basic interpretation without calling the AI."""
-        ptype = problem_data.get('problem_type', 'optimization')
-        objective = problem_data.get('objective', 'optimal')
-        obj_val = solution.get('objective_value')
+        ptype = problem_data.get("problem_type", "optimization")
+        objective = problem_data.get("objective", "optimal")
+        obj_val = solution.get("objective_value")
 
         try:
             obj_str = f"{float(obj_val):.4f}"
@@ -169,25 +168,26 @@ class ResultInterpreter:
             obj_str = str(obj_val)
 
         summary = (
-            f"The {ptype} was solved optimally. "
-            f"The {objective} value is {obj_str}."
+            f"The {ptype} was solved optimally. " f"The {objective} value is {obj_str}."
         )
 
-        variables = solution.get('variables', {})
-        
+        variables = solution.get("variables", {})
+
         # For knapsack problems, enhance variable names with actual item names
-        if problem_data.get('problem_type') == 'knapsack':
-            params = problem_data.get('parameters', {})
-            item_names = params.get('item_names') or params.get('project_names')
+        if problem_data.get("problem_type") == "knapsack":
+            params = problem_data.get("parameters", {})
+            item_names = params.get("item_names") or params.get("project_names")
             if item_names:
                 enhanced_vars = {}
                 for var_name, value in variables.items():
                     if value is not None and abs(value) > 1e-8:
                         try:
-                            if var_name.startswith('item_'):
-                                idx = int(var_name.split('_')[1])
+                            if var_name.startswith("item_"):
+                                idx = int(var_name.split("_")[1])
                                 if 0 <= idx < len(item_names):
-                                    enhanced_vars[f"{var_name} ({item_names[idx]})"] = value
+                                    enhanced_vars[f"{var_name} ({item_names[idx]})"] = (
+                                        value
+                                    )
                                 else:
                                     enhanced_vars[var_name] = value
                             else:
@@ -195,34 +195,32 @@ class ResultInterpreter:
                         except (ValueError, IndexError):
                             enhanced_vars[var_name] = value
                 variables = enhanced_vars
-        
+
         sorted_vars = sorted(
-            ((k, v) for k, v in variables.items()
-             if v is not None and abs(v) > 1e-8),
+            ((k, v) for k, v in variables.items() if v is not None and abs(v) > 1e-8),
             key=lambda kv: abs(kv[1]),
             reverse=True,
         )
         key_findings = [
-            f"Variable {name} = {val} units"
-            for name, val in sorted_vars[:5]
+            f"Variable {name} = {val} units" for name, val in sorted_vars[:5]
         ]
 
-        num_vars = solution.get('num_variables', '?')
-        num_cons = solution.get('num_constraints', '?')
-        solve_time = solution.get('solve_time')
+        num_vars = solution.get("num_variables", "?")
+        num_cons = solution.get("num_constraints", "?")
+        solve_time = solution.get("solve_time")
         try:
             time_str = f"{float(solve_time):.2f}"
         except (TypeError, ValueError):
             time_str = str(solve_time)
 
         return {
-            'summary': summary,
-            'key_findings': key_findings,
-            'recommendations': [
-                'Review decision variables above zero for resource allocation insights',
+            "summary": summary,
+            "key_findings": key_findings,
+            "recommendations": [
+                "Review decision variables above zero for resource allocation insights",
             ],
-            'warnings': solution.get('warnings', []),
-            'business_impact': (
+            "warnings": solution.get("warnings", []),
+            "business_impact": (
                 f"Solved {num_vars} variables with "
                 f"{num_cons} constraints in {time_str} seconds."
             ),
@@ -253,38 +251,40 @@ class ResultInterpreter:
         lines = [
             "# Optimization Results Report\n",
             "## Summary",
-            interp.get('summary', ''), "",
+            interp.get("summary", ""),
+            "",
             "## Key Findings",
         ]
-        for f in interp.get('key_findings', []):
+        for f in interp.get("key_findings", []):
             lines.append(f"- {f}")
 
         lines += ["", "## Recommendations"]
-        for r in interp.get('recommendations', []):
+        for r in interp.get("recommendations", []):
             lines.append(f"- {r}")
 
-        if interp.get('warnings'):
+        if interp.get("warnings"):
             lines += ["", "## Warnings"]
-            for w in interp['warnings']:
+            for w in interp["warnings"]:
                 lines.append(f"- ⚠️ {w}")
 
-        lines += ["", "## Business Impact", interp.get('business_impact', '')]
+        lines += ["", "## Business Impact", interp.get("business_impact", "")]
 
         top = {
-            k: v for k, v in solution.get('variables', {}).items()
+            k: v
+            for k, v in solution.get("variables", {}).items()
             if v is not None and abs(v) > 1e-8
         }
-        
+
         # For knapsack problems, enhance variable names with actual item names
-        if problem_data.get('problem_type') == 'knapsack':
-            params = problem_data.get('parameters', {})
-            item_names = params.get('item_names') or params.get('project_names')
+        if problem_data.get("problem_type") == "knapsack":
+            params = problem_data.get("parameters", {})
+            item_names = params.get("item_names") or params.get("project_names")
             if item_names:
                 enhanced_top = {}
                 for var_name, value in top.items():
                     try:
-                        if var_name.startswith('item_'):
-                            idx = int(var_name.split('_')[1])
+                        if var_name.startswith("item_"):
+                            idx = int(var_name.split("_")[1])
                             if 0 <= idx < len(item_names):
                                 enhanced_top[f"{var_name} ({item_names[idx]})"] = value
                             else:
@@ -294,7 +294,7 @@ class ResultInterpreter:
                     except (ValueError, IndexError):
                         enhanced_top[var_name] = value
                 top = enhanced_top
-        
+
         if top:
             lines += ["", "## Decision Variables (non-zero)"]
             for name, val in list(top.items())[:20]:
@@ -310,13 +310,13 @@ class ResultInterpreter:
     ) -> str:
         parts = [
             "=== Optimization Results ===",
-            interp.get('summary', ''),
+            interp.get("summary", ""),
             "",
             "Key Findings:",
         ]
-        for f in interp.get('key_findings', []):
+        for f in interp.get("key_findings", []):
             parts.append(f"  - {f}")
-        parts += ["", "Business Impact:", interp.get('business_impact', '')]
+        parts += ["", "Business Impact:", interp.get("business_impact", "")]
         return "\n".join(parts)
 
 

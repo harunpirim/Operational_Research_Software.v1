@@ -44,8 +44,7 @@ def _widget_problem_data() -> dict:
 
 def test_non_template_problem_uses_ai_generation_and_solves():
     generator = ModelGenerator()
-    generator.api_client = _build_api_mock(
-        """
+    generator.api_client = _build_api_mock("""
 import pulp
 
 def create_model():
@@ -55,8 +54,7 @@ def create_model():
     prob += 2 * widgets <= 100, "Labor"
     prob += 3 * widgets <= 120, "Material"
     return prob
-        """
-    )
+        """)
 
     model = generator.generate(_widget_problem_data())
     validation = generator.validate_model(model)
@@ -71,7 +69,9 @@ def create_model():
     assert model.variables()[0].varValue == 40
 
     generator.api_client.create_message.assert_called_once()
-    prompt = generator.api_client.create_message.call_args.kwargs["messages"][0]["content"]
+    prompt = generator.api_client.create_message.call_args.kwargs["messages"][0][
+        "content"
+    ]
     assert "Problem Type: integer_programming" in prompt
     assert "profit from producing widgets" in prompt
 
@@ -80,7 +80,9 @@ def test_non_template_problem_requires_ai_api():
     generator = ModelGenerator()
     generator.api_client = None
 
-    with pytest.raises(ValueError, match="AI API not configured for dynamic model generation"):
+    with pytest.raises(
+        ValueError, match="AI API not configured for dynamic model generation"
+    ):
         generator.generate({"problem_type": "linear_programming"})
 
 
@@ -109,8 +111,7 @@ def test_transportation_uses_template_and_skips_ai():
 
 def test_ai_generation_handles_markdown_fences():
     generator = ModelGenerator()
-    generator.api_client = _build_api_mock(
-        """```python
+    generator.api_client = _build_api_mock("""```python
 import pulp
 
 def create_model():
@@ -119,8 +120,7 @@ def create_model():
     prob += x, "Obj"
     prob += x >= 1, "C1"
     return prob
-```"""
-    )
+```""")
 
     model = generator.generate(_widget_problem_data())
     validation = generator.validate_model(model)

@@ -16,16 +16,16 @@ class ModelGenerator:
     Generates mathematical optimization models from structured problem data.
     Can use AI (Anthropic Claude or OpenAI) to help generate model code dynamically.
     """
-    
+
     def __init__(
         self,
         api_key: Optional[str] = None,
         provider: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ):
         """
         Initialize the model generator.
-        
+
         Args:
             api_key: API key (optional, reads from environment if not provided)
             provider: 'anthropic' or 'openai' (optional, auto-detects if not provided)
@@ -38,11 +38,11 @@ class ModelGenerator:
             # API not configured - model generation without AI will still work
             self.api_client = None
             self.model = None
-    
+
     def generate(
         self,
         problem_data: Dict[str, Any],
-        solver_preference: str = 'pulp',
+        solver_preference: str = "pulp",
     ):
         """
         Generate an optimization model from problem data.
@@ -61,11 +61,14 @@ class ModelGenerator:
             ValueError: If problem_type is unrecognised/unknown or generation
                         fails for any reason.
         """
-        problem_type = problem_data.get('problem_type', 'unknown')
-        confidence = problem_data.get('confidence', 0.0)
-        warnings = problem_data.get('warnings', [])
+        problem_type = problem_data.get("problem_type", "unknown")
+        confidence = problem_data.get("confidence", 0.0)
+        warnings = problem_data.get("warnings", [])
 
-        if problem_type in ('unknown', 'general', 'other', '', None) or confidence < 0.1:
+        if (
+            problem_type in ("unknown", "general", "other", "", None)
+            or confidence < 0.1
+        ):
             raise ValueError(
                 "Cannot build model: problem was not recognized as an "
                 "Operations Research problem.\n"
@@ -75,21 +78,21 @@ class ModelGenerator:
                 "what constraints apply."
             )
 
-        if solver_preference == 'cvxpy':
+        if solver_preference == "cvxpy":
             return self._generate_cvxpy_model(problem_data)
 
         try:
-            if problem_type == 'linear_programming':
+            if problem_type == "linear_programming":
                 return self._generate_lp_model(problem_data)
-            elif problem_type == 'integer_programming':
+            elif problem_type == "integer_programming":
                 return self._generate_ip_model(problem_data)
-            elif problem_type == 'mixed_integer_programming':
+            elif problem_type == "mixed_integer_programming":
                 return self._generate_mip_model(problem_data)
-            elif problem_type == 'transportation':
+            elif problem_type == "transportation":
                 return self._generate_transportation_model(problem_data)
-            elif problem_type == 'assignment':
+            elif problem_type == "assignment":
                 return self._generate_assignment_model(problem_data)
-            elif problem_type == 'knapsack':
+            elif problem_type == "knapsack":
                 return self._generate_knapsack_model(problem_data)
             else:
                 return self._generate_with_ai(problem_data)
@@ -97,6 +100,7 @@ class ModelGenerator:
             raise
         except Exception as e:
             import traceback
+
             tb_str = traceback.format_exc()
             raise ValueError(
                 f"Model generation failed for problem type '{problem_type}': {e}\n"
@@ -104,12 +108,12 @@ class ModelGenerator:
                 "Try rephrasing your problem with explicit numbers, variable "
                 "names, and constraints."
             ) from e
-    
+
     # ------------------------------------------------------------------
     #  LP / IP / MIP builders
     # ------------------------------------------------------------------
 
-    _CAT_MAP = {'continuous': 'Continuous', 'integer': 'Integer', 'binary': 'Binary'}
+    _CAT_MAP = {"continuous": "Continuous", "integer": "Integer", "binary": "Binary"}
 
     def _generate_lp_model(self, problem_data: Dict[str, Any]) -> pulp.LpProblem:
         """Build a pure-LP model (all variables default to Continuous)."""
@@ -118,7 +122,9 @@ class ModelGenerator:
     def _generate_ip_model(self, problem_data: Dict[str, Any]) -> pulp.LpProblem:
         """Build an IP model with explicit binary bounds (lowBound=0, upBound=1)."""
         return self._build_structured_model(
-            problem_data, "IP_Problem", explicit_binary_bounds=True,
+            problem_data,
+            "IP_Problem",
+            explicit_binary_bounds=True,
         )
 
     def _generate_mip_model(self, problem_data: Dict[str, Any]) -> pulp.LpProblem:
@@ -141,33 +147,46 @@ class ModelGenerator:
                 lowBound=0 and upBound=1 (standard for IP/MIP).  If False,
                 binary variables omit explicit bounds (PuLP defaults).
         """
-        if os.getenv('OR_DEBUG', '0') == '1':
-            print(f"\n[DEBUG] _build_structured_model({problem_name}) — problem_data received:")
+        if os.getenv("OR_DEBUG", "0") == "1":
+            print(
+                f"\n[DEBUG] _build_structured_model({problem_name}) — problem_data received:"
+            )
             print(json.dumps(problem_data, indent=2, default=str))
-            print("[DEBUG] parameters keys:", list(problem_data.get('parameters', {}).keys()))
-            print("[DEBUG] decision_variables:", [v.get('name') for v in problem_data.get('decision_variables', [])])
+            print(
+                "[DEBUG] parameters keys:",
+                list(problem_data.get("parameters", {}).keys()),
+            )
+            print(
+                "[DEBUG] decision_variables:",
+                [v.get("name") for v in problem_data.get("decision_variables", [])],
+            )
 
         # 1 — objective direction
-        sense = (pulp.LpMaximize
-                 if problem_data.get('objective') == 'maximize'
-                 else pulp.LpMinimize)
+        sense = (
+            pulp.LpMaximize
+            if problem_data.get("objective") == "maximize"
+            else pulp.LpMinimize
+        )
         prob = pulp.LpProblem(problem_name, sense)
 
         # 2 — decision variables
-        var_defs = problem_data.get('decision_variables', [])
+        var_defs = problem_data.get("decision_variables", [])
         if not var_defs:
             raise ValueError("No decision_variables in problem_data")
 
         lp_vars: Dict[str, pulp.LpVariable] = {}
         for v in var_defs:
-            name = v['name']
-            cat = self._CAT_MAP.get(v.get('type', 'continuous'), 'Continuous')
-            if cat == 'Binary' and explicit_binary_bounds:
+            name = v["name"]
+            cat = self._CAT_MAP.get(v.get("type", "continuous"), "Continuous")
+            if cat == "Binary" and explicit_binary_bounds:
                 lp_vars[name] = pulp.LpVariable(
-                    name, lowBound=0, upBound=1, cat='Binary',
+                    name,
+                    lowBound=0,
+                    upBound=1,
+                    cat="Binary",
                 )
             else:
-                low = None if cat == 'Binary' else 0
+                low = None if cat == "Binary" else 0
                 lp_vars[name] = pulp.LpVariable(name, lowBound=low, cat=cat)
 
         # 3 — objective coefficients (multi-layer)
@@ -176,43 +195,50 @@ class ModelGenerator:
         n = len(var_list)
 
         lp_extracted = self._extract_lp_data(problem_data)
-        obj_coeffs = lp_extracted['obj_coeffs']
+        obj_coeffs = lp_extracted["obj_coeffs"]
 
         if not obj_coeffs:
             obj_coeffs = self._extract_objective_coefficients(
-                problem_data, var_names,
+                problem_data,
+                var_names,
             )
 
         # 4 — constraints (first pass)
         constraints = self._extract_constraints_list(problem_data)
 
-        if not constraints and lp_extracted['constraint_coefficients'] and lp_extracted['constraint_rhs']:
-            matrix = lp_extracted['constraint_coefficients']
-            rhs_vals = lp_extracted['constraint_rhs']
-            parsed_cons = problem_data.get('constraints', [])
+        if (
+            not constraints
+            and lp_extracted["constraint_coefficients"]
+            and lp_extracted["constraint_rhs"]
+        ):
+            matrix = lp_extracted["constraint_coefficients"]
+            rhs_vals = lp_extracted["constraint_rhs"]
+            parsed_cons = problem_data.get("constraints", [])
             for idx, row in enumerate(matrix):
-                sense = '<='
+                sense = "<="
                 if idx < len(parsed_cons) and isinstance(parsed_cons[idx], dict):
-                    sense = parsed_cons[idx].get('sense', '<=')
+                    sense = parsed_cons[idx].get("sense", "<=")
                 rhs_val = rhs_vals[idx] if idx < len(rhs_vals) else 0.0
-                constraints.append({
-                    'name': f'c_{idx}',
-                    'coefficients': row,
-                    'sense': sense,
-                    'rhs': rhs_val,
-                })
+                constraints.append(
+                    {
+                        "name": f"c_{idx}",
+                        "coefficients": row,
+                        "sense": sense,
+                        "rhs": rhs_val,
+                    }
+                )
 
         # 5 — AI fallback if coefficients or constraints are missing
         if not obj_coeffs or not constraints:
             ai_data = self._extract_model_data_with_ai(problem_data)
             if ai_data:
                 if not obj_coeffs:
-                    ai_coeffs = ai_data.get('objective_coefficients')
+                    ai_coeffs = ai_data.get("objective_coefficients")
                     if isinstance(ai_coeffs, list) and ai_coeffs:
                         obj_coeffs = [float(c) for c in ai_coeffs]
                         print("INFO: Objective coefficients recovered via AI fallback.")
                 if not constraints:
-                    ai_cons = ai_data.get('constraints')
+                    ai_cons = ai_data.get("constraints")
                     if isinstance(ai_cons, list) and ai_cons:
                         constraints = ai_cons
                         print("INFO: Constraints recovered via AI fallback.")
@@ -251,14 +277,26 @@ class ModelGenerator:
     # ------------------------------------------------------------------
 
     _COEFF_KEYS = (
-        'objective_coefficients', 'coefficients', 'obj_coefficients',
-        'costs', 'profits', 'objective_values',
-        'unit_profits', 'unit_costs', 'cost_per_unit', 'profit_per_unit',
-        'values', 'prices',
+        "objective_coefficients",
+        "coefficients",
+        "obj_coefficients",
+        "costs",
+        "profits",
+        "objective_values",
+        "unit_profits",
+        "unit_costs",
+        "cost_per_unit",
+        "profit_per_unit",
+        "values",
+        "prices",
     )
 
     _VAR_COEFF_FIELDS = (
-        'coefficient', 'cost', 'profit', 'value', 'objective_coefficient',
+        "coefficient",
+        "cost",
+        "profit",
+        "value",
+        "objective_coefficient",
     )
 
     def _extract_objective_coefficients(
@@ -275,20 +313,22 @@ class ModelGenerator:
           3. Ask the AI to extract them.
           4. Return ``None`` only if all three tiers fail.
         """
-        params = problem_data.get('parameters', {})
+        params = problem_data.get("parameters", {})
         search_dicts = [params, problem_data]
 
         # --- Tier 1: known keys in parameters / problem_data -------------
         for d in search_dicts:
             for key in self._COEFF_KEYS:
                 val = d.get(key)
-                if isinstance(val, list) and val and all(
-                    isinstance(v, (int, float)) for v in val
+                if (
+                    isinstance(val, list)
+                    and val
+                    and all(isinstance(v, (int, float)) for v in val)
                 ):
                     return [float(x) for x in val]
 
         # --- Tier 2: per-variable fields in decision_variables -----------
-        var_defs = problem_data.get('decision_variables', [])
+        var_defs = problem_data.get("decision_variables", [])
         if var_defs:
             extracted = []
             for v in var_defs:
@@ -321,8 +361,8 @@ class ModelGenerator:
                 max_tokens=256,
                 temperature=0,
             )
-            raw = response['content'].strip()
-            fence = re.search(r'\[[\s\S]*?\]', raw)
+            raw = response["content"].strip()
+            fence = re.search(r"\[[\s\S]*?\]", raw)
             text = fence.group(0) if fence else raw
             coeffs = json.loads(text)
             if isinstance(coeffs, list) and all(
@@ -365,14 +405,15 @@ class ModelGenerator:
         last = text.rfind("}")
         if first != -1 and last != -1 and last > first:
             try:
-                return json.loads(text[first:last + 1])
+                return json.loads(text[first : last + 1])
             except json.JSONDecodeError:
                 pass
 
         raise json.JSONDecodeError("No valid JSON found in response", text, 0)
 
     def _extract_model_data_with_ai(
-        self, problem_data: Dict[str, Any],
+        self,
+        problem_data: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
         """
         AI fallback called when structured extraction yields no coefficients
@@ -412,7 +453,7 @@ class ModelGenerator:
                 max_tokens=2048,
                 temperature=0,
             )
-            parsed = self._parse_json(response['content'])
+            parsed = self._parse_json(response["content"])
             if isinstance(parsed, dict):
                 return parsed
         except Exception:
@@ -424,25 +465,29 @@ class ModelGenerator:
     # ------------------------------------------------------------------
 
     _CONSTRAINT_LIST_KEYS = (
-        'constraints', 'constraint_list', 'conditions',
-        'restrictions', 'limits',
+        "constraints",
+        "constraint_list",
+        "conditions",
+        "restrictions",
+        "limits",
     )
-    _EXPR_KEYS = ('expression', 'formula', 'lhs', 'constraint', 'equation')
-    _RHS_KEYS = ('rhs', 'right_hand_side', 'value', 'bound', 'limit')
-    _SENSE_KEYS = ('sense', 'type', 'operator', 'direction')
+    _EXPR_KEYS = ("expression", "formula", "lhs", "constraint", "equation")
+    _RHS_KEYS = ("rhs", "right_hand_side", "value", "bound", "limit")
+    _SENSE_KEYS = ("sense", "type", "operator", "direction")
 
-    _SENSE_MAP_LE = {'leq', 'le', '<=', 'max', 'upper'}
-    _SENSE_MAP_GE = {'geq', 'ge', '>=', 'min', 'lower'}
-    _SENSE_MAP_EQ = {'eq', '=', '=='}
+    _SENSE_MAP_LE = {"leq", "le", "<=", "max", "upper"}
+    _SENSE_MAP_GE = {"geq", "ge", ">=", "min", "lower"}
+    _SENSE_MAP_EQ = {"eq", "=", "=="}
 
     def _extract_constraints_list(
-        self, problem_data: Dict[str, Any],
+        self,
+        problem_data: Dict[str, Any],
     ) -> List[Any]:
         """
         Find the constraint list from ``problem_data``, trying several keys
         in both ``parameters`` and the top level.
         """
-        params = problem_data.get('parameters', {})
+        params = problem_data.get("parameters", {})
         for d in (params, problem_data):
             for key in self._CONSTRAINT_LIST_KEYS:
                 val = d.get(key)
@@ -466,7 +511,7 @@ class ModelGenerator:
         """Return the first truthy value found under *keys* in *d*."""
         for k in keys:
             val = d.get(k)
-            if val is not None and val != '':
+            if val is not None and val != "":
                 return val
         return default
 
@@ -490,14 +535,16 @@ class ModelGenerator:
         try:
             self._do_add_constraint(prob, constraint, lp_vars, index)
         except Exception:
-            label = constraint if isinstance(constraint, str) else (
-                self._get_first(constraint, self._EXPR_KEYS, constraint)
-                if isinstance(constraint, dict) else str(constraint)
+            label = (
+                constraint
+                if isinstance(constraint, str)
+                else (
+                    self._get_first(constraint, self._EXPR_KEYS, constraint)
+                    if isinstance(constraint, dict)
+                    else str(constraint)
+                )
             )
-            print(
-                f"WARNING: Skipped constraint {index}: "
-                f"could not parse '{label}'"
-            )
+            print(f"WARNING: Skipped constraint {index}: " f"could not parse '{label}'")
 
     def _do_add_constraint(
         self,
@@ -508,22 +555,22 @@ class ModelGenerator:
     ) -> None:
         """Inner implementation of constraint parsing (may raise)."""
         if isinstance(constraint, str):
-            constraint = {'expression': constraint}
+            constraint = {"expression": constraint}
 
         if not isinstance(constraint, dict):
             raise ValueError(f"Unexpected constraint type: {type(constraint)}")
 
-        name = constraint.get('name', f'c_{index}')
-        expr_str = str(self._get_first(constraint, self._EXPR_KEYS, '') or '')
+        name = constraint.get("name", f"c_{index}")
+        expr_str = str(self._get_first(constraint, self._EXPR_KEYS, "") or "")
         explicit_rhs = self._get_first(constraint, self._RHS_KEYS)
-        raw_sense = str(self._get_first(constraint, self._SENSE_KEYS, '<=') or '<=')
+        raw_sense = str(self._get_first(constraint, self._SENSE_KEYS, "<=") or "<=")
 
         if not expr_str:
             raise ValueError("Empty expression")
 
         # --- Detect sense operator embedded in the expression string ------
         embedded_sense = None
-        for op in ('<=', '>=', '==', '='):
+        for op in ("<=", ">=", "==", "="):
             if op in expr_str:
                 parts = expr_str.split(op, 1)
                 lhs_str = parts[0].strip()
@@ -552,20 +599,18 @@ class ModelGenerator:
             return
 
         # --- Parse LHS for coefficient * variable terms ------------------
-        var_pattern = '|'.join(
+        var_pattern = "|".join(
             re.escape(v) for v in sorted(lp_vars, key=len, reverse=True)
         )
-        term_re = re.compile(
-            r'([+-]?\s*\d*\.?\d*)\s*\*?\s*(' + var_pattern + r')'
-        )
+        term_re = re.compile(r"([+-]?\s*\d*\.?\d*)\s*\*?\s*(" + var_pattern + r")")
 
         lhs_expr = pulp.lpSum(0)
         for m in term_re.finditer(lhs_str):
-            coef_str = m.group(1).replace(' ', '')
+            coef_str = m.group(1).replace(" ", "")
             var_name = m.group(2)
-            if coef_str in ('', '+'):
+            if coef_str in ("", "+"):
                 coef = 1.0
-            elif coef_str == '-':
+            elif coef_str == "-":
                 coef = -1.0
             else:
                 coef = float(coef_str)
@@ -584,7 +629,8 @@ class ModelGenerator:
     # ------------------------------------------------------------------
 
     def _extract_lp_data(
-        self, problem_data: Dict[str, Any],
+        self,
+        problem_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Multi-layer extraction for LP/IP/MIP objective coefficients,
@@ -593,22 +639,35 @@ class ModelGenerator:
         Returns a dict with keys ``obj_coeffs``, ``constraint_coefficients``,
         and ``constraint_rhs`` (any may be ``None``).
         """
-        params = problem_data.get('parameters', {})
+        params = problem_data.get("parameters", {})
         search_dicts = [params, problem_data]
-        var_defs = problem_data.get('decision_variables', [])
+        var_defs = problem_data.get("decision_variables", [])
 
         # --- Objective coefficients --------------------------------------
         _OBJ_KEYS = (
-            'objective_coefficients', 'coefficients', 'obj_coefficients',
-            'profits', 'costs', 'objective_values', 'unit_profits',
-            'unit_costs', 'cost_per_unit', 'profit_per_unit', 'prices',
+            "objective_coefficients",
+            "coefficients",
+            "obj_coefficients",
+            "profits",
+            "costs",
+            "objective_values",
+            "unit_profits",
+            "unit_costs",
+            "cost_per_unit",
+            "profit_per_unit",
+            "prices",
         )
         obj_coeffs = self._first_numeric_list(search_dicts, _OBJ_KEYS)
 
         if not obj_coeffs and var_defs:
             _VAR_OBJ_FIELDS = (
-                'coefficient', 'profit', 'cost', 'value',
-                'objective_coefficient', 'unit_profit', 'unit_cost',
+                "coefficient",
+                "profit",
+                "cost",
+                "value",
+                "objective_coefficient",
+                "unit_profit",
+                "unit_cost",
             )
             extracted = []
             for v in var_defs:
@@ -626,15 +685,22 @@ class ModelGenerator:
 
         # --- Constraint RHS ----------------------------------------------
         _RHS_KEYS = (
-            'constraint_rhs', 'rhs', 'right_hand_side', 'bounds',
-            'rhs_values', 'limits', 'capacities',
+            "constraint_rhs",
+            "rhs",
+            "right_hand_side",
+            "bounds",
+            "rhs_values",
+            "limits",
+            "capacities",
         )
         constraint_rhs = self._first_numeric_list(search_dicts, _RHS_KEYS)
 
         # --- Constraint coefficient matrix --------------------------------
         _MATRIX_KEYS = (
-            'constraint_coefficients', 'constraint_matrix',
-            'lhs_coefficients', 'A_matrix',
+            "constraint_coefficients",
+            "constraint_matrix",
+            "lhs_coefficients",
+            "A_matrix",
         )
         constraint_coefficients = None
         for d in search_dicts:
@@ -647,13 +713,14 @@ class ModelGenerator:
                 break
 
         return {
-            'obj_coeffs': obj_coeffs,
-            'constraint_rhs': constraint_rhs,
-            'constraint_coefficients': constraint_coefficients,
+            "obj_coeffs": obj_coeffs,
+            "constraint_rhs": constraint_rhs,
+            "constraint_coefficients": constraint_coefficients,
         }
 
     def _extract_knapsack_data(
-        self, problem_data: Dict[str, Any],
+        self,
+        problem_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Multi-layer extraction for knapsack problems.
@@ -661,15 +728,21 @@ class ModelGenerator:
         Returns ``{'capacity', 'weights', 'values', 'item_names'}``.
         Raises ``ValueError`` if capacity or weights cannot be found.
         """
-        params = problem_data.get('parameters', {})
+        params = problem_data.get("parameters", {})
         search_dicts = [params, problem_data]
-        var_defs = problem_data.get('decision_variables', [])
+        var_defs = problem_data.get("decision_variables", [])
 
         # --- Capacity ----------------------------------------------------
         _CAP_KEYS = (
-            'capacity', 'max_weight', 'weight_limit', 'knapsack_capacity',
-            'bag_capacity', 'limit', 'total_capacity',
-            'budget', 'investment_budget',  # FIX: classifier uses 'budget' for investment problems
+            "capacity",
+            "max_weight",
+            "weight_limit",
+            "knapsack_capacity",
+            "bag_capacity",
+            "limit",
+            "total_capacity",
+            "budget",
+            "investment_budget",  # FIX: classifier uses 'budget' for investment problems
         )
         capacity = None
         for d in search_dicts:
@@ -683,21 +756,40 @@ class ModelGenerator:
 
         # --- Weights -----------------------------------------------------
         _WEIGHT_KEYS = (
-            'weights', 'weight', 'item_weights', 'sizes', 'volumes',
-            'costs', 'cost', 'investment_costs', 'prices',  # FIX: investment problems use 'costs' as weights
+            "weights",
+            "weight",
+            "item_weights",
+            "sizes",
+            "volumes",
+            "costs",
+            "cost",
+            "investment_costs",
+            "prices",  # FIX: investment problems use 'costs' as weights
         )
         weights = self._first_numeric_list(search_dicts, _WEIGHT_KEYS)
 
         # --- Values / profits --------------------------------------------
         _VALUE_KEYS = (
-            'values', 'value', 'profits', 'item_values',
-            'benefits', 'rewards',
-            'returns', 'return', 'investment_returns', 'gains',  # FIX: investment problems use 'returns' as values
+            "values",
+            "value",
+            "profits",
+            "item_values",
+            "benefits",
+            "rewards",
+            "returns",
+            "return",
+            "investment_returns",
+            "gains",  # FIX: investment problems use 'returns' as values
         )
         values = self._first_numeric_list(search_dicts, _VALUE_KEYS)
 
         # --- Item names (optional) ----------------------------------------
-        _NAME_KEYS = ('item_names', 'items', 'names', 'project_names')  # FIX: classifier uses 'project_names'
+        _NAME_KEYS = (
+            "item_names",
+            "items",
+            "names",
+            "project_names",
+        )  # FIX: classifier uses 'project_names'
         item_names = None
         for d in search_dicts:
             for k in _NAME_KEYS:
@@ -710,25 +802,31 @@ class ModelGenerator:
 
         # --- Fallback: read from decision_variables ----------------------
         if (not weights or not values) and var_defs:
-            _W_FIELDS = ('weight', 'size')
-            _V_FIELDS = ('value', 'profit', 'benefit')
+            _W_FIELDS = ("weight", "size")
+            _V_FIELDS = ("value", "profit", "benefit")
             w_list, v_list, n_list = [], [], []
             for v in var_defs:
                 w = next(
-                    (float(v[f]) for f in _W_FIELDS
-                     if f in v and isinstance(v[f], (int, float))),
+                    (
+                        float(v[f])
+                        for f in _W_FIELDS
+                        if f in v and isinstance(v[f], (int, float))
+                    ),
                     None,
                 )
                 vv = next(
-                    (float(v[f]) for f in _V_FIELDS
-                     if f in v and isinstance(v[f], (int, float))),
+                    (
+                        float(v[f])
+                        for f in _V_FIELDS
+                        if f in v and isinstance(v[f], (int, float))
+                    ),
                     None,
                 )
                 if w is None or vv is None:
                     break
                 w_list.append(w)
                 v_list.append(vv)
-                n_list.append(v.get('name', f'item_{len(n_list)}'))
+                n_list.append(v.get("name", f"item_{len(n_list)}"))
             else:
                 if w_list:
                     if not weights:
@@ -756,17 +854,18 @@ class ModelGenerator:
         if not values:
             values = [1.0] * n
         if not item_names:
-            item_names = [f'item_{i}' for i in range(n)]
+            item_names = [f"item_{i}" for i in range(n)]
 
         return {
-            'capacity': capacity,
-            'weights': weights,
-            'values': values,
-            'item_names': item_names,
+            "capacity": capacity,
+            "weights": weights,
+            "values": values,
+            "item_names": item_names,
         }
 
     def _extract_assignment_data(
-        self, problem_data: Dict[str, Any],
+        self,
+        problem_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Multi-layer extraction for assignment problems.
@@ -774,14 +873,18 @@ class ModelGenerator:
         Returns ``{'cost_matrix', 'agent_names', 'task_names'}``.
         Raises ``ValueError`` if the cost matrix cannot be found.
         """
-        params = problem_data.get('parameters', {})
+        params = problem_data.get("parameters", {})
         search_dicts = [params, problem_data]
 
         # --- Cost / profit matrix ----------------------------------------
         _MATRIX_KEYS = (
-            'cost_matrix', 'assignment_matrix', 'costs',
-            'profit_matrix', 'efficiency_matrix', 'time_matrix',
-            'distance_matrix',
+            "cost_matrix",
+            "assignment_matrix",
+            "costs",
+            "profit_matrix",
+            "efficiency_matrix",
+            "time_matrix",
+            "distance_matrix",
         )
         matrix = None
         for d in search_dicts:
@@ -802,8 +905,12 @@ class ModelGenerator:
 
         # --- Agent names (optional) --------------------------------------
         _AGENT_KEYS = (
-            'agent_names', 'agents', 'workers', 'machines',
-            'resources', 'employees',
+            "agent_names",
+            "agents",
+            "workers",
+            "machines",
+            "resources",
+            "employees",
         )
         agent_names = None
         for d in search_dicts:
@@ -817,8 +924,12 @@ class ModelGenerator:
 
         # --- Task names (optional) ---------------------------------------
         _TASK_KEYS = (
-            'task_names', 'tasks', 'jobs', 'assignments',
-            'activities', 'projects',
+            "task_names",
+            "tasks",
+            "jobs",
+            "assignments",
+            "activities",
+            "projects",
         )
         task_names = None
         for d in search_dicts:
@@ -832,20 +943,21 @@ class ModelGenerator:
 
         n = len(matrix)
         if not agent_names:
-            agent_names = [f'agent_{i}' for i in range(n)]
+            agent_names = [f"agent_{i}" for i in range(n)]
         m = len(matrix[0]) if matrix else n
         if not task_names:
-            task_names = [f'task_{j}' for j in range(m)]
+            task_names = [f"task_{j}" for j in range(m)]
 
         return {
-            'cost_matrix': matrix,
-            'agent_names': agent_names,
-            'task_names': task_names,
+            "cost_matrix": matrix,
+            "agent_names": agent_names,
+            "task_names": task_names,
         }
 
     @staticmethod
     def _first_numeric_list(
-        sources: List[Dict[str, Any]], keys: tuple,
+        sources: List[Dict[str, Any]],
+        keys: tuple,
     ) -> Optional[List[float]]:
         """Return the first list of numbers found under any of *keys*."""
         for d in sources:
@@ -863,7 +975,8 @@ class ModelGenerator:
     # ------------------------------------------------------------------
 
     def _extract_transportation_data(
-        self, problem_data: Dict[str, Any],
+        self,
+        problem_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Three-layer extraction for transportation supply / demand / costs.
@@ -878,7 +991,7 @@ class ModelGenerator:
         Returns ``{'supply': [...], 'demand': [...], 'costs': [[...]]}``.
         Raises ``ValueError`` only when all three layers fail.
         """
-        params = problem_data.get('parameters', {})
+        params = problem_data.get("parameters", {})
         search_dicts = [params, problem_data]
 
         supply = None
@@ -886,9 +999,9 @@ class ModelGenerator:
         raw_costs = None
 
         # === Layer 1 — standard keys from DataExtractor =================
-        _L1_SUPPLY = ('supply',)
-        _L1_DEMAND = ('demand',)
-        _L1_COSTS = ('costs',)
+        _L1_SUPPLY = ("supply",)
+        _L1_DEMAND = ("demand",)
+        _L1_COSTS = ("costs",)
 
         supply = self._first_list(search_dicts, _L1_SUPPLY)
         demand = self._first_list(search_dicts, _L1_DEMAND)
@@ -901,26 +1014,53 @@ class ModelGenerator:
             demand = None
 
         if supply and demand and raw_costs:
-            return {'supply': supply, 'demand': demand, 'costs': raw_costs}
+            return {"supply": supply, "demand": demand, "costs": raw_costs}
 
         # === Layer 2 — extended key-name fallback ========================
         _L2_SUPPLY = (
-            'supply_capacities', 'warehouse_supply', 'capacities',
-            'sources', 'warehouse_capacities', 'available', 'supply_values',
-            'row_supply', 'warehouse_capacity', 'source_supply', 'supplies',
-            'stock', 'inventory', 'production_capacity',
+            "supply_capacities",
+            "warehouse_supply",
+            "capacities",
+            "sources",
+            "warehouse_capacities",
+            "available",
+            "supply_values",
+            "row_supply",
+            "warehouse_capacity",
+            "source_supply",
+            "supplies",
+            "stock",
+            "inventory",
+            "production_capacity",
         )
         _L2_DEMAND = (
-            'store_demands', 'destination_demand', 'demands',
-            'requirements', 'needed', 'stores', 'demand_values',
-            'destination_demands', 'customer_demand', 'consumption',
-            'orders', 'requirements_list',
+            "store_demands",
+            "destination_demand",
+            "demands",
+            "requirements",
+            "needed",
+            "stores",
+            "demand_values",
+            "destination_demands",
+            "customer_demand",
+            "consumption",
+            "orders",
+            "requirements_list",
         )
         _L2_COSTS = (
-            'cost_matrix', 'shipping_costs', 'transportation_costs',
-            'cost_data', 'unit_costs', 'per_unit_costs', 'route_costs',
-            'distance_matrix', 'shipping_matrix', 'cost_table', 'rates',
-            'tariffs', 'freight_costs',
+            "cost_matrix",
+            "shipping_costs",
+            "transportation_costs",
+            "cost_data",
+            "unit_costs",
+            "per_unit_costs",
+            "route_costs",
+            "distance_matrix",
+            "shipping_matrix",
+            "cost_table",
+            "rates",
+            "tariffs",
+            "freight_costs",
         )
 
         if not supply:
@@ -935,32 +1075,35 @@ class ModelGenerator:
             raw_costs = self._first_value(search_dicts, _L2_COSTS)
 
         if supply and demand and raw_costs:
-            return {'supply': supply, 'demand': demand, 'costs': raw_costs}
+            return {"supply": supply, "demand": demand, "costs": raw_costs}
 
         # === Layer 3 — direct CSV structure reading ======================
-        raw_headers = params.get('_raw_headers')
-        raw_rows = params.get('_raw_rows')
+        raw_headers = params.get("_raw_headers")
+        raw_rows = params.get("_raw_rows")
         if raw_headers and raw_rows:
             try:
                 from src.ingestion.data_extractor import DataExtractor
+
                 auto = DataExtractor._auto_extract_transportation(
-                    None, raw_headers, raw_rows,
+                    None,
+                    raw_headers,
+                    raw_rows,
                 )
-                if not supply and auto.get('supply'):
-                    supply = auto['supply']
-                if not demand and auto.get('demand'):
-                    demand = auto['demand']
-                if not raw_costs and auto.get('costs'):
-                    raw_costs = auto['costs']
+                if not supply and auto.get("supply"):
+                    supply = auto["supply"]
+                if not demand and auto.get("demand"):
+                    demand = auto["demand"]
+                if not raw_costs and auto.get("costs"):
+                    raw_costs = auto["costs"]
             except Exception:
                 pass
 
         # === Final check =================================================
         missing = []
         if not supply:
-            missing.append('supply')
+            missing.append("supply")
         if not demand:
-            missing.append('demand')
+            missing.append("demand")
         if missing:
             all_keys = list(params.keys())
             raise ValueError(
@@ -979,7 +1122,7 @@ class ModelGenerator:
                     f"Invalid supply values (must be numeric). "
                     f"Got: {supply} (type: {type(supply).__name__})"
                 ) from e
-                
+
         if demand:
             try:
                 demand = [float(x) for x in demand]
@@ -988,7 +1131,7 @@ class ModelGenerator:
                     f"Invalid demand values (must be numeric). "
                     f"Got: {demand} (type: {type(demand).__name__})"
                 ) from e
-                
+
         if raw_costs and isinstance(raw_costs, list):
             try:
                 if isinstance(raw_costs[0], list):
@@ -999,25 +1142,33 @@ class ModelGenerator:
                 # Costs might be None or empty, which is OK
                 pass
 
-        return {'supply': supply, 'demand': demand, 'costs': raw_costs}
+        return {"supply": supply, "demand": demand, "costs": raw_costs}
 
-    def _generate_transportation_model(self, problem_data: Dict[str, Any]) -> pulp.LpProblem:
+    def _generate_transportation_model(
+        self, problem_data: Dict[str, Any]
+    ) -> pulp.LpProblem:
         """
         Generate a transportation problem model.
 
         Uses ``_extract_transportation_data()`` (3-layer fallback) to
         locate supply, demand, and cost data regardless of key names.
         """
-        if os.getenv('OR_DEBUG', '0') == '1':
+        if os.getenv("OR_DEBUG", "0") == "1":
             print("\n[DEBUG] _generate_transportation_model() — problem_data received:")
             print(json.dumps(problem_data, indent=2, default=str))
-            print("[DEBUG] parameters keys:", list(problem_data.get('parameters', {}).keys()))
-            print("[DEBUG] decision_variables:", [v.get('name') for v in problem_data.get('decision_variables', [])])
+            print(
+                "[DEBUG] parameters keys:",
+                list(problem_data.get("parameters", {}).keys()),
+            )
+            print(
+                "[DEBUG] decision_variables:",
+                [v.get("name") for v in problem_data.get("decision_variables", [])],
+            )
 
         extracted = self._extract_transportation_data(problem_data)
-        supply = extracted['supply']
-        demand = extracted['demand']
-        raw_costs = extracted['costs']
+        supply = extracted["supply"]
+        demand = extracted["demand"]
+        raw_costs = extracted["costs"]
         notes: List[str] = []
 
         # Validate that we have valid data
@@ -1025,14 +1176,12 @@ class ModelGenerator:
             raise ValueError(f"Invalid or empty supply data: {supply}")
         if not demand or not isinstance(demand, list):
             raise ValueError(f"Invalid or empty demand data: {demand}")
-        
+
         num_sources = len(supply)
         num_destinations = len(demand)
 
         if raw_costs is None:
-            costs = [
-                [1.0] * num_destinations for _ in range(num_sources)
-            ]
+            costs = [[1.0] * num_destinations for _ in range(num_sources)]
             notes.append(
                 "No cost data found — using uniform cost of 1.0 for every route."
             )
@@ -1069,14 +1218,17 @@ class ModelGenerator:
             "ship",
             ((i, j) for i in range(num_sources) for j in range(num_destinations)),
             lowBound=0,
-            cat='Continuous',
+            cat="Continuous",
         )
 
-        prob += pulp.lpSum(
-            costs[i][j] * x[i, j]
-            for i in range(num_sources)
-            for j in range(num_destinations)
-        ), "Total_Cost"
+        prob += (
+            pulp.lpSum(
+                costs[i][j] * x[i, j]
+                for i in range(num_sources)
+                for j in range(num_destinations)
+            ),
+            "Total_Cost",
+        )
 
         for i in range(num_sources):
             prob += (
@@ -1097,7 +1249,8 @@ class ModelGenerator:
 
     @staticmethod
     def _first_list(
-        sources: List[Dict[str, Any]], keys: tuple,
+        sources: List[Dict[str, Any]],
+        keys: tuple,
     ) -> List:
         """
         Search *sources* (a list of dicts) for the first non-empty list
@@ -1112,7 +1265,8 @@ class ModelGenerator:
 
     @staticmethod
     def _first_value(
-        sources: List[Dict[str, Any]], keys: tuple,
+        sources: List[Dict[str, Any]],
+        keys: tuple,
     ) -> Any:
         """
         Search *sources* (a list of dicts) for the first truthy value
@@ -1127,7 +1281,9 @@ class ModelGenerator:
 
     @staticmethod
     def _ensure_2d_costs(
-        raw: Any, num_sources: int, num_destinations: int,
+        raw: Any,
+        num_sources: int,
+        num_destinations: int,
     ) -> List[List[float]]:
         """
         Accept a 2-D list or a flat list and return a 2-D cost matrix.
@@ -1146,15 +1302,17 @@ class ModelGenerator:
                 f"{expected} expected."
             )
         return [
-            flat[i * num_destinations:(i + 1) * num_destinations]
+            flat[i * num_destinations : (i + 1) * num_destinations]
             for i in range(num_sources)
         ]
-    
-    def _generate_assignment_model(self, problem_data: Dict[str, Any]) -> pulp.LpProblem:
+
+    def _generate_assignment_model(
+        self, problem_data: Dict[str, Any]
+    ) -> pulp.LpProblem:
         """Generate an assignment problem model."""
 
         extracted = self._extract_assignment_data(problem_data)
-        costs = extracted['cost_matrix']
+        costs = extracted["cost_matrix"]
 
         n = len(costs)
         m = len(costs[0]) if costs else n
@@ -1164,13 +1322,13 @@ class ModelGenerator:
         x = pulp.LpVariable.dicts(
             "assign",
             ((i, j) for i in range(n) for j in range(m)),
-            cat='Binary',
+            cat="Binary",
         )
 
-        prob += pulp.lpSum(
-            costs[i][j] * x[i, j]
-            for i in range(n) for j in range(m)
-        ), "Total_Cost"
+        prob += (
+            pulp.lpSum(costs[i][j] * x[i, j] for i in range(n) for j in range(m)),
+            "Total_Cost",
+        )
 
         for i in range(n):
             prob += (
@@ -1190,24 +1348,21 @@ class ModelGenerator:
         """Generate a 0-1 knapsack problem model."""
 
         extracted = self._extract_knapsack_data(problem_data)
-        capacity = extracted['capacity']
-        weights = extracted['weights']
-        values = extracted['values']
-        item_names = extracted['item_names']
+        capacity = extracted["capacity"]
+        weights = extracted["weights"]
+        values = extracted["values"]
+        item_names = extracted["item_names"]
 
         n = len(weights)
 
         sense = (
             pulp.LpMaximize
-            if problem_data.get('objective', 'maximize') == 'maximize'
+            if problem_data.get("objective", "maximize") == "maximize"
             else pulp.LpMinimize
         )
         prob = pulp.LpProblem("Knapsack_Problem", sense)
 
-        x = [
-            pulp.LpVariable(item_names[i], cat='Binary')
-            for i in range(n)
-        ]
+        x = [pulp.LpVariable(item_names[i], cat="Binary") for i in range(n)]
 
         prob += pulp.lpSum(values[i] * x[i] for i in range(n)), "Total_Value"
 
@@ -1255,7 +1410,7 @@ class ModelGenerator:
             max_tokens=4096,
             temperature=0.3,
         )
-        raw = response['content']
+        raw = response["content"]
 
         # 2 — extract code from ```python ... ``` fences (fall back to raw)
         fence = self._CODE_FENCE_RE.search(raw)
@@ -1286,15 +1441,19 @@ class ModelGenerator:
                 f"AI model generation failed: {exc}\n\n"
                 f"--- generated code ---\n{code}"
             ) from exc
-    
+
     # ------------------------------------------------------------------
     #  CVXPY model builder (quadratic / convex non-linear)
     # ------------------------------------------------------------------
 
-    _RETURN_KEYS = ('expected_returns', 'returns', 'mean_returns',
-                    'expected_return', 'avg_returns')
-    _COV_KEYS = ('covariance_matrix', 'covariance', 'cov_matrix',
-                 'cov', 'risk_matrix')
+    _RETURN_KEYS = (
+        "expected_returns",
+        "returns",
+        "mean_returns",
+        "expected_return",
+        "avg_returns",
+    )
+    _COV_KEYS = ("covariance_matrix", "covariance", "cov_matrix", "cov", "risk_matrix")
 
     def _generate_cvxpy_model(self, problem_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1323,11 +1482,11 @@ class ModelGenerator:
                 "Run: pip install cvxpy numpy"
             ) from exc
 
-        ptype = problem_data.get('problem_type', '')
-        params = problem_data.get('parameters', {})
+        ptype = problem_data.get("problem_type", "")
+        params = problem_data.get("parameters", {})
 
         # ------- portfolio_optimization -----------------------------------
-        if ptype == 'portfolio_optimization':
+        if ptype == "portfolio_optimization":
             returns = None
             for k in self._RETURN_KEYS:
                 val = params.get(k)
@@ -1349,33 +1508,31 @@ class ModelGenerator:
                     "in parameters."
                 )
 
-            weights = cp.Variable(n, nonneg=True, name='weights')
-            cp_vars = {f'w_{i}': weights[i] for i in range(n)}
-            cp_vars['weights'] = weights
+            weights = cp.Variable(n, nonneg=True, name="weights")
+            cp_vars = {f"w_{i}": weights[i] for i in range(n)}
+            cp_vars["weights"] = weights
 
             constraints = [cp.sum(weights) == 1]
 
-            budget_min = params.get('min_weight')
-            budget_max = params.get('max_weight')
+            budget_min = params.get("min_weight")
+            budget_max = params.get("max_weight")
             if budget_min is not None:
                 constraints.append(weights >= float(budget_min))
             if budget_max is not None:
                 constraints.append(weights <= float(budget_max))
 
-            target_return = params.get('target_return')
-            objective = problem_data.get('objective', 'minimize')
+            target_return = params.get("target_return")
+            objective = problem_data.get("objective", "minimize")
 
-            if objective == 'minimize' and cov is not None:
+            if objective == "minimize" and cov is not None:
                 cp_obj = cp.Minimize(cp.quad_form(weights, cov))
                 if target_return is not None:
                     constraints.append(returns @ weights >= float(target_return))
-            elif objective == 'maximize' and returns is not None:
+            elif objective == "maximize" and returns is not None:
                 cp_obj = cp.Maximize(returns @ weights)
-                risk_limit = params.get('risk_limit', params.get('max_risk'))
+                risk_limit = params.get("risk_limit", params.get("max_risk"))
                 if risk_limit is not None and cov is not None:
-                    constraints.append(
-                        cp.quad_form(weights, cov) <= float(risk_limit)
-                    )
+                    constraints.append(cp.quad_form(weights, cov) <= float(risk_limit))
             elif cov is not None:
                 cp_obj = cp.Minimize(cp.quad_form(weights, cov))
             else:
@@ -1383,31 +1540,30 @@ class ModelGenerator:
 
             prob = cp.Problem(cp_obj, constraints)
             return {
-                'type': 'cvxpy',
-                'problem': prob,
-                'variables': cp_vars,
-                'constraints': constraints,
+                "type": "cvxpy",
+                "problem": prob,
+                "variables": cp_vars,
+                "constraints": constraints,
             }
 
         # ------- resource_allocation with quadratic costs -----------------
-        if ptype == 'resource_allocation' and 'quadratic_costs' in params:
-            A = np.array(params['quadratic_costs'], dtype=float)
-            b = np.array(params.get('targets', params.get('demand', [])),
-                         dtype=float)
+        if ptype == "resource_allocation" and "quadratic_costs" in params:
+            A = np.array(params["quadratic_costs"], dtype=float)
+            b = np.array(params.get("targets", params.get("demand", [])), dtype=float)
             n_vars = A.shape[1] if A.ndim == 2 else len(A)
 
-            x = cp.Variable(n_vars, nonneg=True, name='x')
-            cp_vars = {f'x_{i}': x[i] for i in range(n_vars)}
-            cp_vars['x'] = x
+            x = cp.Variable(n_vars, nonneg=True, name="x")
+            cp_vars = {f"x_{i}": x[i] for i in range(n_vars)}
+            cp_vars["x"] = x
 
             constraints = []
 
-            budget = params.get('budget', params.get('capacity'))
+            budget = params.get("budget", params.get("capacity"))
             if budget is not None:
                 constraints.append(cp.sum(x) <= float(budget))
 
-            lb = params.get('lower_bounds')
-            ub = params.get('upper_bounds')
+            lb = params.get("lower_bounds")
+            ub = params.get("upper_bounds")
             if lb is not None:
                 constraints.append(x >= np.array(lb, dtype=float))
             if ub is not None:
@@ -1416,50 +1572,50 @@ class ModelGenerator:
             cp_obj = cp.Minimize(cp.sum_squares(A @ x - b))
             prob = cp.Problem(cp_obj, constraints)
             return {
-                'type': 'cvxpy',
-                'problem': prob,
-                'variables': cp_vars,
-                'constraints': constraints,
+                "type": "cvxpy",
+                "problem": prob,
+                "variables": cp_vars,
+                "constraints": constraints,
             }
 
         # ------- fallback: build a PuLP model, wrap for CVXPY solver ------
-        pulp_model = self.generate(problem_data, solver_preference='pulp')
+        pulp_model = self.generate(problem_data, solver_preference="pulp")
         return {
-            'type': 'cvxpy',
-            'problem': pulp_model,
-            'variables': {},
-            'constraints': [],
+            "type": "cvxpy",
+            "problem": pulp_model,
+            "variables": {},
+            "constraints": [],
         }
 
     def validate_model(self, model: pulp.LpProblem) -> Dict[str, Any]:
         """
         Validate a model for common issues.
-        
+
         Returns:
             Dictionary with validation results
         """
-        
+
         issues = []
         warnings = []
-        
+
         # Check for variables
         if not model.variables():
             issues.append("No decision variables defined")
-        
+
         # Check for objective
         if model.objective is None:
             issues.append("No objective function defined")
-        
+
         # Check for constraints
         if not model.constraints:
             warnings.append("No constraints defined - problem may be unbounded")
-        
+
         return {
             "valid": len(issues) == 0,
             "issues": issues,
             "warnings": warnings,
             "num_variables": len(model.variables()),
-            "num_constraints": len(model.constraints)
+            "num_constraints": len(model.constraints),
         }
 
     # ------------------------------------------------------------------
@@ -1469,7 +1625,7 @@ class ModelGenerator:
     def generate_from_mps(
         self,
         parsed_mps: Dict[str, Any],
-        solver_preference: str = 'auto',
+        solver_preference: str = "auto",
     ):
         """
         Build a model directly from the structured output of
@@ -1489,30 +1645,30 @@ class ModelGenerator:
             or a ``pulp.LpProblem``; *problem_data* is a classifier-
             compatible dict for the rest of the pipeline.
         """
-        file_path = parsed_mps.get('file_path')
+        file_path = parsed_mps.get("file_path")
 
         # --- Detect problem type from variable bounds -------------------
         var_types = [
-            b.get('type', 'continuous')
-            for b in parsed_mps.get('variable_bounds', {}).values()
+            b.get("type", "continuous")
+            for b in parsed_mps.get("variable_bounds", {}).values()
         ]
-        n_binary = sum(1 for t in var_types if t == 'binary')
-        n_integer = sum(1 for t in var_types if t == 'integer')
+        n_binary = sum(1 for t in var_types if t == "binary")
+        n_integer = sum(1 for t in var_types if t == "integer")
         n_continuous = len(var_types) - n_binary - n_integer
 
         if n_binary:
-            detected_type = 'mixed_integer_programming'
+            detected_type = "mixed_integer_programming"
         elif n_integer:
-            detected_type = 'integer_programming'
+            detected_type = "integer_programming"
         else:
-            detected_type = 'linear_programming'
+            detected_type = "linear_programming"
 
         # --- Try CVXPY first --------------------------------------------
         model = None
         used_cvxpy = False
         best_solver = None
 
-        if solver_preference in ('auto', 'cvxpy') and file_path:
+        if solver_preference in ("auto", "cvxpy") and file_path:
             try:
                 model, best_solver = self._build_mps_with_cvxpy(file_path)
                 used_cvxpy = True
@@ -1524,34 +1680,41 @@ class ModelGenerator:
             model = self._build_mps_with_pulp(parsed_mps)
 
         # --- Build problem_data compatible with ResultInterpreter -------
-        _obj_sense = parsed_mps.get('objective_sense', 'minimize')
+        _obj_sense = parsed_mps.get("objective_sense", "minimize")
         problem_data: Dict[str, Any] = {
-            'problem_type': detected_type,
-            'objective': _obj_sense,
-            'objective_description': (
+            "problem_type": detected_type,
+            "objective": _obj_sense,
+            "objective_description": (
                 f"{_obj_sense.capitalize()} {parsed_mps.get('objective_name', '?')} "
                 f"(MPS benchmark)"
             ),
-            'source': 'miplib',
-            'instance_name': parsed_mps.get('name', ''),
-            'mps_file_path': file_path,
-            'confidence': 1.0,
-            'assumptions': [],
-            'warnings': [
+            "source": "miplib",
+            "instance_name": parsed_mps.get("name", ""),
+            "mps_file_path": file_path,
+            "confidence": 1.0,
+            "assumptions": [],
+            "warnings": [
                 f"Loaded from MPS file. Solver path: "
                 f"{'CVXPY' if used_cvxpy else 'PuLP'}.",
                 f"Detected type: {detected_type} ({n_binary} binary, "
                 f"{n_integer} integer, {n_continuous} continuous variables).",
             ],
-            'parameters': {},
-            'decision_variables': [
-                {'name': v, 'type': parsed_mps.get('variable_bounds', {}).get(
-                    v, {},
-                ).get('type', 'continuous'), 'description': ''}
-                for v in parsed_mps.get('variables', [])[:20]
+            "parameters": {},
+            "decision_variables": [
+                {
+                    "name": v,
+                    "type": parsed_mps.get("variable_bounds", {})
+                    .get(
+                        v,
+                        {},
+                    )
+                    .get("type", "continuous"),
+                    "description": "",
+                }
+                for v in parsed_mps.get("variables", [])[:20]
             ],
-            'constraints': [],
-            'notes': '',
+            "constraints": [],
+            "notes": "",
         }
 
         return model, problem_data
@@ -1569,7 +1732,7 @@ class ModelGenerator:
 
         available = cp.installed_solvers()
         best_solver = None
-        for name in ('GUROBI', 'CPLEX', 'SCIP', 'GLPK_MI', 'CBC', 'OSQP'):
+        for name in ("GUROBI", "CPLEX", "SCIP", "GLPK_MI", "CBC", "OSQP"):
             if name in available:
                 best_solver = name
                 break
@@ -1577,66 +1740,78 @@ class ModelGenerator:
         problem = cp.Problem.from_file(mps_file_path)
 
         return {
-            'type': 'cvxpy',
-            'problem': problem,
-            'variables': {},
-            'solver': best_solver,
+            "type": "cvxpy",
+            "problem": problem,
+            "variables": {},
+            "solver": best_solver,
         }, best_solver
 
     @staticmethod
     def _build_mps_with_pulp(parsed_mps: Dict[str, Any]) -> pulp.LpProblem:
         """Build a ``pulp.LpProblem`` from the structured MPS dict."""
-        name = parsed_mps.get('name', 'mps_problem') or 'mps_problem'
-        _sense = pulp.LpMaximize if parsed_mps.get('objective_sense') == 'maximize' else pulp.LpMinimize
+        name = parsed_mps.get("name", "mps_problem") or "mps_problem"
+        _sense = (
+            pulp.LpMaximize
+            if parsed_mps.get("objective_sense") == "maximize"
+            else pulp.LpMinimize
+        )
         prob = pulp.LpProblem(name, _sense)
 
-        var_names = parsed_mps.get('variables', [])
-        vbounds = parsed_mps.get('variable_bounds', {})
-        obj_coefs = parsed_mps.get('objective_coefficients', {})
+        var_names = parsed_mps.get("variables", [])
+        vbounds = parsed_mps.get("variable_bounds", {})
+        obj_coefs = parsed_mps.get("objective_coefficients", {})
 
         _CAT_MAP = {
-            'continuous': pulp.LpContinuous,
-            'integer': pulp.LpInteger,
-            'binary': pulp.LpBinary,
+            "continuous": pulp.LpContinuous,
+            "integer": pulp.LpInteger,
+            "binary": pulp.LpBinary,
         }
 
         lp_vars: Dict[str, pulp.LpVariable] = {}
         for vname in var_names:
             info = vbounds.get(vname, {})
-            cat = _CAT_MAP.get(info.get('type', 'continuous'), pulp.LpContinuous)
-            lb = info.get('lb', 0.0)
-            ub = info.get('ub', None)
+            cat = _CAT_MAP.get(info.get("type", "continuous"), pulp.LpContinuous)
+            lb = info.get("lb", 0.0)
+            ub = info.get("ub", None)
             if cat == pulp.LpBinary:
                 lb, ub = 0, 1
             lp_vars[vname] = pulp.LpVariable(
-                vname, lowBound=lb, upBound=ub, cat=cat,
+                vname,
+                lowBound=lb,
+                upBound=ub,
+                cat=cat,
             )
 
-        prob += pulp.lpSum(
-            obj_coefs.get(v, 0.0) * lp_vars[v]
-            for v in var_names
-            if v in lp_vars and obj_coefs.get(v, 0.0) != 0.0
-        ), "objective"
+        prob += (
+            pulp.lpSum(
+                obj_coefs.get(v, 0.0) * lp_vars[v]
+                for v in var_names
+                if v in lp_vars and obj_coefs.get(v, 0.0) != 0.0
+            ),
+            "objective",
+        )
 
         _SENSE_MAP = {
-            '<=': pulp.LpConstraintLE,
-            '>=': pulp.LpConstraintGE,
-            '=': pulp.LpConstraintEQ,
+            "<=": pulp.LpConstraintLE,
+            ">=": pulp.LpConstraintGE,
+            "=": pulp.LpConstraintEQ,
         }
-        for con in parsed_mps.get('constraints', []):
-            cname = con.get('name', '')
-            coeffs = con.get('coefficients', {})
-            rhs_val = con.get('rhs', 0.0)
+        for con in parsed_mps.get("constraints", []):
+            cname = con.get("name", "")
+            coeffs = con.get("coefficients", {})
+            rhs_val = con.get("rhs", 0.0)
             sense_code = _SENSE_MAP.get(
-                con.get('type', '<='), pulp.LpConstraintLE,
+                con.get("type", "<="),
+                pulp.LpConstraintLE,
             )
             lhs = pulp.lpSum(
-                coef * lp_vars[v]
-                for v, coef in coeffs.items()
-                if v in lp_vars
+                coef * lp_vars[v] for v, coef in coeffs.items() if v in lp_vars
             )
             prob += pulp.LpConstraint(
-                lhs, sense=sense_code, rhs=rhs_val, name=cname,
+                lhs,
+                sense=sense_code,
+                rhs=rhs_val,
+                name=cname,
             )
 
         return prob
@@ -1645,7 +1820,7 @@ class ModelGenerator:
 if __name__ == "__main__":
     # Example usage
     generator = ModelGenerator()
-    
+
     # Test with a simple problem
     test_data = {
         "problem_type": "integer_programming",
@@ -1654,35 +1829,35 @@ if __name__ == "__main__":
         "decision_variables": ["number of widgets to produce"],
         "constraints": [
             "Cannot exceed 100 hours of labor",
-            "Cannot exceed 120 kg of material"
+            "Cannot exceed 120 kg of material",
         ],
         "parameters": {
             "profit_per_widget": 50,
             "labor_hours_per_widget": 2,
             "material_kg_per_widget": 3,
             "available_labor_hours": 100,
-            "available_material_kg": 120
+            "available_material_kg": 120,
         },
         "confidence": 0.95,
-        "notes": "Widget production must be integer values"
+        "notes": "Widget production must be integer values",
     }
-    
+
     print("Generating model from problem data...")
     model = generator.generate(test_data)
-    
+
     validation = generator.validate_model(model)
     print("\nModel validation:", validation)
-    
-    if validation['valid']:
+
+    if validation["valid"]:
         print(f"\n✓ Model successfully created!")
         print(f"  Variables: {validation['num_variables']}")
         print(f"  Constraints: {validation['num_constraints']}")
-        
+
         # Try to solve it
         print("\nAttempting to solve...")
         model.solve()
         print(f"Status: {pulp.LpStatus[model.status]}")
-        
+
         if model.status == 1:  # Optimal
             print(f"Objective value: {pulp.value(model.objective)}")
             print("\nVariable values:")

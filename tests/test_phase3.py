@@ -9,11 +9,13 @@ Shows the mathematical model that gets built.
 
 import sys
 import os
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 # Load .env file so ANTHROPIC_API_KEY is available
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -27,9 +29,9 @@ except ImportError as e:
     print(f"  Details: {e}")
     sys.exit(1)
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("  OR ASSISTANT — Phase 3: Model Generator Test")
-print("="*60)
+print("=" * 60)
 print("\n  Paste your problem in plain English below.")
 print("  Press Enter twice when done.\n")
 
@@ -48,9 +50,9 @@ if not problem:
     print("\n  No input received. Exiting.")
     sys.exit(1)
 
-print("\n" + "-"*60)
+print("\n" + "-" * 60)
 print("  Step 1: Classifying problem...")
-print("-"*60)
+print("-" * 60)
 try:
     classifier = ProblemClassifier()
     problem_data = classifier.classify(problem)
@@ -61,9 +63,9 @@ except Exception as e:
     print(f"\n  FAILED at classifier: {e}")
     sys.exit(1)
 
-print("\n" + "-"*60)
+print("\n" + "-" * 60)
 print("  Step 2: Building mathematical model...")
-print("-"*60)
+print("-" * 60)
 try:
     generator = ModelGenerator()
     model = generator.generate(problem_data)
@@ -73,10 +75,10 @@ try:
         sys.exit(1)
 
     sense = "Maximize" if model.sense == pulp.LpMaximize else "Minimize"
-    variables    = model.variables()
-    binary_vars  = [v for v in variables if v.cat == 'Binary']
-    integer_vars = [v for v in variables if v.cat == 'Integer']
-    cont_vars    = [v for v in variables if v.cat == 'Continuous']
+    variables = model.variables()
+    binary_vars = [v for v in variables if v.cat == "Binary"]
+    integer_vars = [v for v in variables if v.cat == "Integer"]
+    cont_vars = [v for v in variables if v.cat == "Continuous"]
 
     print(f"\n  Model Name     : {model.name}")
     print(f"  Direction      : {sense}")
@@ -100,13 +102,14 @@ try:
     if len(constraints) > 5:
         print(f"    ... and {len(constraints)-5} more")
 
-    print("\n" + "-"*60)
+    print("\n" + "-" * 60)
     print(f"  RESULT: Model built successfully.")
     print(f"  {len(variables)} variables, {len(constraints)} constraints.")
-    print("-"*60 + "\n")
+    print("-" * 60 + "\n")
 
 except Exception as e:
     print(f"\n  FAILED at model generator: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)

@@ -12,10 +12,11 @@ the model generator.
 import sys
 import json
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -28,17 +29,33 @@ except ImportError as e:
 
 # --- Known key lists from ModelGenerator (keep in sync) ------------------
 SUPPLY_KEYS = (
-    'supply', 'supply_capacities', 'warehouse_supply', 'capacities',
-    'sources', 'warehouse_capacities', 'available',
+    "supply",
+    "supply_capacities",
+    "warehouse_supply",
+    "capacities",
+    "sources",
+    "warehouse_capacities",
+    "available",
 )
 DEMAND_KEYS = (
-    'demand', 'store_demands', 'destination_demand', 'demands',
-    'requirements', 'needed', 'stores',
+    "demand",
+    "store_demands",
+    "destination_demand",
+    "demands",
+    "requirements",
+    "needed",
+    "stores",
 )
 COST_KEYS = (
-    'costs', 'cost_matrix', 'shipping_costs', 'transportation_costs',
-    'cost_data', 'unit_costs', 'per_unit_costs', 'route_costs',
-    'distance_matrix',
+    "costs",
+    "cost_matrix",
+    "shipping_costs",
+    "transportation_costs",
+    "cost_data",
+    "unit_costs",
+    "per_unit_costs",
+    "route_costs",
+    "distance_matrix",
 )
 
 # -------------------------------------------------------------------------
@@ -82,7 +99,7 @@ print(json.dumps(result, indent=2, default=str))
 print("-" * 60)
 
 # --- Key-match report ----------------------------------------------------
-params = result.get('parameters', {})
+params = result.get("parameters", {})
 search_dicts = [params, result]
 
 
@@ -98,9 +115,11 @@ def find_key(sources, keys):
 print("\n  KEY-MATCH REPORT (what the model generator will find):")
 print()
 
-for label, keys in [("SUPPLY", SUPPLY_KEYS),
-                     ("DEMAND", DEMAND_KEYS),
-                     ("COST",   COST_KEYS)]:
+for label, keys in [
+    ("SUPPLY", SUPPLY_KEYS),
+    ("DEMAND", DEMAND_KEYS),
+    ("COST", COST_KEYS),
+]:
     found_key, found_val = find_key(search_dicts, keys)
     if found_key:
         preview = json.dumps(found_val, default=str)

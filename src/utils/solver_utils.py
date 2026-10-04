@@ -20,10 +20,10 @@ def verify_cvxpy_solvers() -> Dict[str, Any]:
         import cvxpy as cp
     except ImportError:
         return {
-            'available': False,
-            'solvers': [],
-            'default': '',
-            'error': 'cvxpy is not installed. Run: pip install cvxpy',
+            "available": False,
+            "solvers": [],
+            "default": "",
+            "error": "cvxpy is not installed. Run: pip install cvxpy",
         }
 
     solvers: List[str] = []
@@ -36,18 +36,18 @@ def verify_cvxpy_solvers() -> Dict[str, Any]:
         x = cp.Variable()
         prob = cp.Problem(cp.Minimize(x), [x >= 2])
         prob.solve()
-        default_solver = prob.solver_stats.solver_name if prob.solver_stats else ''
+        default_solver = prob.solver_stats.solver_name if prob.solver_stats else ""
     except Exception as exc:
         return {
-            'available': False,
-            'solvers': solvers,
-            'default': '',
-            'error': f'CVXPY imported but test solve failed: {exc}',
+            "available": False,
+            "solvers": solvers,
+            "default": "",
+            "error": f"CVXPY imported but test solve failed: {exc}",
         }
 
     return {
-        'available': True,
-        'solvers': solvers,
-        'default': default_solver,
-        'error': '',
+        "available": True,
+        "solvers": solvers,
+        "default": default_solver,
+        "error": "",
     }

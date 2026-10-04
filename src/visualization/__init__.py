@@ -8,4 +8,4 @@ and scheduling Gantt charts.
 
 from .chart_generator import ChartGenerator, create_chart
 
-__all__ = ['ChartGenerator', 'create_chart']
+__all__ = ["ChartGenerator", "create_chart"]

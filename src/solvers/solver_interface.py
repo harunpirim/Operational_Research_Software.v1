@@ -11,6 +11,7 @@ from .solver_router import get_solver_display_name
 
 class SolverStatus(Enum):
     """Solver status codes"""
+
     OPTIMAL = "Optimal"
     INFEASIBLE = "Infeasible"
     UNBOUNDED = "Unbounded"
@@ -39,14 +40,15 @@ class SolverInterface:
         self.problem_data = problem_data if problem_data is not None else {}
         self.solver_type = self.original_solver_type
         self.solver = self._initialize_solver()
-        
+
     @property
     def will_use_cache(self) -> bool:
         """Check if this solve will use cached results."""
-        if self.problem_data.get('source') == 'miplib':
-            instance_name = self.problem_data.get('instance_name')
+        if self.problem_data.get("source") == "miplib":
+            instance_name = self.problem_data.get("instance_name")
             if instance_name:
                 from src.storage.miplib_cache import MIPLIBCache
+
                 cache = MIPLIBCache()
                 return cache.get(instance_name) is not None
         return False
@@ -54,15 +56,15 @@ class SolverInterface:
     def _initialize_solver(self):
         """Initialize the appropriate solver."""
         st = self.solver_type
-        
+
         # Handle new solver key format
-        if st == 'pulp_cbc' or st in ('pulp', 'cbc'):
+        if st == "pulp_cbc" or st in ("pulp", "cbc"):
             return pulp.PULP_CBC_CMD(msg=0)
-            
-        if st.startswith('cvxpy_') or st == 'cvxpy':
+
+        if st.startswith("cvxpy_") or st == "cvxpy":
             return None  # no PuLP solver needed; _solve_with_cvxpy handles it
 
-        if st == 'gurobi':
+        if st == "gurobi":
             try:
                 return pulp.GUROBI_CMD(msg=0)
             except (ImportError, Exception):
@@ -70,7 +72,7 @@ class SolverInterface:
                     "Gurobi not available. Install and configure license."
                 )
 
-        if st == 'cplex':
+        if st == "cplex":
             try:
                 return pulp.CPLEX_CMD(msg=0)
             except (ImportError, Exception):
@@ -78,22 +80,21 @@ class SolverInterface:
                     "CPLEX not available. Install and configure license."
                 )
 
-        if st == 'glpk':
+        if st == "glpk":
             try:
                 return pulp.GLPK_CMD(msg=0)
             except (ImportError, Exception):
                 raise RuntimeError("GLPK not available.")
 
-        if st == 'auto-detect' or st == 'auto':
+        if st == "auto-detect" or st == "auto":
             # Auto-detect is now handled by solver_router
             return pulp.PULP_CBC_CMD(msg=0)
 
-        if st in ('or-tools', 'ortools'):
+        if st in ("or-tools", "ortools"):
             self._ui_info(
-                "OR-Tools selected — using PuLP CBC "
-                "(OR-Tools integration coming soon)."
+                "OR-Tools selected — using PuLP CBC (OR-Tools integration coming soon)."
             )
-            self.solver_type = 'pulp'
+            self.solver_type = "pulp"
             return pulp.PULP_CBC_CMD(msg=0)
 
         return pulp.PULP_CBC_CMD(msg=0)
@@ -104,9 +105,9 @@ class SolverInterface:
         This method is kept for backward compatibility only.
         """
         for name, factory in (
-            ('gurobi', pulp.GUROBI_CMD),
-            ('cplex',  pulp.CPLEX_CMD),
-            ('glpk',   pulp.GLPK_CMD),
+            ("gurobi", pulp.GUROBI_CMD),
+            ("cplex", pulp.CPLEX_CMD),
+            ("glpk", pulp.GLPK_CMD),
         ):
             try:
                 solver = factory(msg=0)
@@ -116,7 +117,7 @@ class SolverInterface:
                     return solver
             except (ImportError, Exception):
                 continue
-        self.solver_type = 'pulp'
+        self.solver_type = "pulp"
         print("INFO: Auto-detect — using default PuLP CBC solver.")
         return pulp.PULP_CBC_CMD(msg=0)
 
@@ -125,67 +126,66 @@ class SolverInterface:
         """Show an info message via Streamlit if running in a UI, else print."""
         try:
             import streamlit as st
+
             st.info(message)
         except (ImportError, Exception):
             print(f"INFO: {message}")
 
     _STATUS_LABELS = {
-        1: 'Optimal',
-        0: 'Not Solved',
-        -1: 'Infeasible',
-        -2: 'Unbounded',
-        -3: 'Undefined',
+        1: "Optimal",
+        0: "Not Solved",
+        -1: "Infeasible",
+        -2: "Unbounded",
+        -3: "Undefined",
     }
 
     _STATUS_WARNINGS = {
-        'Infeasible': (
-            'Problem has no feasible solution — constraints may '
-            'contradict each other.'
+        "Infeasible": (
+            "Problem has no feasible solution — constraints may contradict each other."
         ),
-        'Unbounded': (
-            'Problem is unbounded — add upper bounds to variables.'
-        ),
-        'Not Solved': (
-            'Solver did not find a solution within the time limit.'
-        ),
-        'Undefined': 'Solver returned an undefined status.',
+        "Unbounded": "Problem is unbounded — add upper bounds to variables.",
+        "Not Solved": "Solver did not find a solution within the time limit.",
+        "Undefined": "Solver returned an undefined status.",
     }
 
     def _empty_result(self, **overrides) -> Dict[str, Any]:
         """Return a guaranteed-shape result dict, with optional overrides."""
         # Get display name for the resolved solver
         solver_name = self.solver_type
-        if hasattr(self, 'resolved_solver_key'):
+        if hasattr(self, "resolved_solver_key"):
             solver_name = get_solver_display_name(self.resolved_solver_key)
-        
+
         base: Dict[str, Any] = {
-            'status': 'Error',
-            'is_optimal': False,
-            'objective_value': None,
-            'variables': {},
-            'num_variables': 0,
-            'num_constraints': 0,
-            'solve_time': 0.0,
-            'solver_name': solver_name,
-            'warnings': [],
-            'error_message': '',
+            "status": "Error",
+            "is_optimal": False,
+            "objective_value": None,
+            "variables": {},
+            "num_variables": 0,
+            "num_constraints": 0,
+            "solve_time": 0.0,
+            "solver_name": solver_name,
+            "warnings": [],
+            "error_message": "",
         }
         base.update(overrides)
         return base
-    
+
     def _maybe_cache_and_return(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Cache MIPLIB solutions before returning."""
         # Only cache successful MIPLIB solutions
-        if (self.problem_data.get('source') == 'miplib' and 
-            result.get('is_optimal') and 
-            'cache_metadata' not in result):  # Don't re-cache cached results
-            
-            instance_name = self.problem_data.get('instance_name')
+        if (
+            self.problem_data.get("source") == "miplib"
+            and result.get("is_optimal")
+            and "cache_metadata" not in result
+        ):  # Don't re-cache cached results
+
+            instance_name = self.problem_data.get("instance_name")
             if instance_name:
                 from src.storage.miplib_cache import MIPLIBCache
+
                 cache = MIPLIBCache()
                 cache.set(instance_name, result)
-        
+
         return result
 
     def _get_adaptive_timeout(
@@ -226,68 +226,68 @@ class SolverInterface:
         """
         # Check MIPLIB cache first
         from src.storage.miplib_cache import MIPLIBCache
-        
-        if self.problem_data.get('source') == 'miplib':
-            instance_name = self.problem_data.get('instance_name')
+
+        if self.problem_data.get("source") == "miplib":
+            instance_name = self.problem_data.get("instance_name")
             if instance_name:
                 cache = MIPLIBCache()
                 cached_solution = cache.get(instance_name)
                 if cached_solution:
                     # Only use cache if we're solving with the same solver type
                     # This prevents errors when switching between PuLP and CVXPY
-                    cached_solver = cached_solution.get('solver_name', '').lower()
-                    current_is_cvxpy = self.original_solver_type.startswith('cvxpy')
-                    cached_is_cvxpy = 'cvxpy' in cached_solver
-                    
+                    cached_solver = cached_solution.get("solver_name", "").lower()
+                    current_is_cvxpy = self.original_solver_type.startswith("cvxpy")
+                    cached_is_cvxpy = "cvxpy" in cached_solver
+
                     if current_is_cvxpy == cached_is_cvxpy:
                         return cached_solution
                     # Otherwise, solve fresh with the new solver
-        
+
         # The solver has already been resolved by app.py
         resolved_key = self.original_solver_type
         self.resolved_solver_key = resolved_key
-        
+
         # Update solver type
         self.solver_type = resolved_key
         self.resolved_explanation = ""  # No longer needed since app.py handles this
 
         # Adaptive timeout: respect user override, otherwise scale with problem size
-        _n_vars = self.problem_data.get('num_variables', 0) or 0
-        _n_cons = self.problem_data.get('num_constraints', 0) or 0
+        _n_vars = self.problem_data.get("num_variables", 0) or 0
+        _n_cons = self.problem_data.get("num_constraints", 0) or 0
         _timeout = self._get_adaptive_timeout(max_time, _n_vars, _n_cons)
-        
+
         # Route to appropriate solver
         # Fast-path: SCIP selected + we have an MPS file → use PySCIPOpt directly.
         # This avoids the expensive PuLP → CVXPY conversion for large MIPLIB instances.
-        if resolved_key == 'cvxpy_scip':
-            mps_path = self.problem_data.get('mps_file_path')
+        if resolved_key == "cvxpy_scip":
+            mps_path = self.problem_data.get("mps_file_path")
             if mps_path:
                 direct_result = self._solve_with_pyscipopt(mps_path, max_time=_timeout)
                 if direct_result is not None:
                     return direct_result
 
-        if resolved_key.startswith('cvxpy_') or self.solver_type == 'cvxpy':
+        if resolved_key.startswith("cvxpy_") or self.solver_type == "cvxpy":
             return self._solve_with_cvxpy(model, max_time=_timeout)
 
-        if isinstance(model, dict) and model.get('type') == 'cvxpy':
+        if isinstance(model, dict) and model.get("type") == "cvxpy":
             return self._solve_with_cvxpy(model, max_time=_timeout)
 
         if model is None or not isinstance(model, pulp.LpProblem):
             return self._empty_result(
-                error_message='No valid model to solve.',
+                error_message="No valid model to solve.",
             )
 
         start_time = time.time()
 
         try:
-            if _timeout and hasattr(self.solver, 'timeLimit'):
+            if _timeout and hasattr(self.solver, "timeLimit"):
                 self.solver.timeLimit = _timeout
 
             model.solve(self.solver)
             solve_time = round(time.time() - start_time, 4)
 
             status_code = model.status
-            status_label = self._STATUS_LABELS.get(status_code, 'Undefined')
+            status_label = self._STATUS_LABELS.get(status_code, "Undefined")
             is_optimal = status_code == 1
 
             # --- variable extraction (individually guarded) --------------
@@ -324,9 +324,12 @@ class SolverInterface:
             status_warning = self._STATUS_WARNINGS.get(status_label)
             if status_warning:
                 warnings_list.append(status_warning)
-            
+
             # Add solver routing explanation if there was a fallback
-            if hasattr(self, 'resolved_explanation') and 'falling back' in self.resolved_explanation.lower():
+            if (
+                hasattr(self, "resolved_explanation")
+                and "falling back" in self.resolved_explanation.lower()
+            ):
                 warnings_list.append(self.resolved_explanation)
 
             result = self._empty_result(
@@ -352,13 +355,13 @@ class SolverInterface:
     # ------------------------------------------------------------------
 
     _CVXPY_STATUS_MAP = {
-        'optimal': 'Optimal',
-        'infeasible': 'Infeasible',
-        'unbounded': 'Unbounded',
-        'infeasible_inaccurate': 'Infeasible',
-        'unbounded_inaccurate': 'Unbounded',
-        'optimal_inaccurate': 'Optimal (warning: inaccurate)',
-        'solver_error': 'Error',
+        "optimal": "Optimal",
+        "infeasible": "Infeasible",
+        "unbounded": "Unbounded",
+        "infeasible_inaccurate": "Infeasible",
+        "unbounded_inaccurate": "Unbounded",
+        "optimal_inaccurate": "Optimal (warning: inaccurate)",
+        "solver_error": "Error",
     }
 
     def _solve_with_cvxpy(
@@ -377,7 +380,7 @@ class SolverInterface:
             import cvxpy as cp
         except ImportError:
             return self._empty_result(
-                error_message='cvxpy is not installed. Run: pip install cvxpy',
+                error_message="cvxpy is not installed. Run: pip install cvxpy",
             )
 
         start = time.time()
@@ -389,10 +392,10 @@ class SolverInterface:
 
             # --- unwrap model-generator CVXPY dict ------------------------
             _suggested_solver = None
-            if isinstance(model, dict) and model.get('type') == 'cvxpy':
-                inner = model.get('problem')
-                cp_vars = model.get('variables', {})
-                _suggested_solver = model.get('solver')
+            if isinstance(model, dict) and model.get("type") == "cvxpy":
+                inner = model.get("problem")
+                cp_vars = model.get("variables", {})
+                _suggested_solver = model.get("solver")
                 if isinstance(inner, cp.Problem):
                     prob = inner
                     cp_cons = inner.constraints
@@ -401,16 +404,16 @@ class SolverInterface:
                 else:
                     return self._empty_result(
                         error_message=(
-                            f'CVXPY dict has unsupported problem type: '
-                            f'{type(inner).__name__}'
+                            "CVXPY dict has unsupported problem type: "
+                            f"{type(inner).__name__}"
                         ),
                     )
 
             # --- accept a raw CVXPY dict (objective + constraints) --------
-            if prob is None and isinstance(model, dict) and 'objective' in model:
-                cp_obj = model['objective']
-                cp_cons = model.get('constraints', [])
-                cp_vars = model.get('variables', {})
+            if prob is None and isinstance(model, dict) and "objective" in model:
+                cp_obj = model["objective"]
+                cp_cons = model.get("constraints", [])
+                cp_vars = model.get("variables", {})
                 prob = cp.Problem(cp_obj, cp_cons)
 
             # --- convert PuLP → CVXPY ------------------------------------
@@ -418,17 +421,21 @@ class SolverInterface:
                 cp_vars = {}
                 for v in model.variables():
                     nonneg = v.lowBound is not None and v.lowBound >= 0
-                    if v.cat == 'Integer':
+                    if v.cat == "Integer":
                         cp_vars[v.name] = cp.Variable(
-                            name=v.name, integer=True, nonneg=nonneg,
+                            name=v.name,
+                            integer=True,
+                            nonneg=nonneg,
                         )
-                    elif v.cat == 'Binary':
+                    elif v.cat == "Binary":
                         cp_vars[v.name] = cp.Variable(
-                            name=v.name, boolean=True,
+                            name=v.name,
+                            boolean=True,
                         )
                     else:
                         cp_vars[v.name] = cp.Variable(
-                            name=v.name, nonneg=nonneg,
+                            name=v.name,
+                            nonneg=nonneg,
                         )
 
                 # objective
@@ -462,142 +469,163 @@ class SolverInterface:
             if prob is None:
                 return self._empty_result(
                     error_message=(
-                        f'Unsupported model type for CVXPY: {type(model).__name__}'
+                        f"Unsupported model type for CVXPY: {type(model).__name__}"
                     ),
                 )
 
             # --- solve with proper solver availability checking -----------
             solved = False
-            solver_used = ''
+            solver_used = ""
             warnings_list = []
-            
+
             # Check if the requested solver is actually available
             _solver_chain = []
-            
-            if hasattr(self, 'resolved_solver_key') and self.resolved_solver_key.startswith('cvxpy_'):
+
+            if hasattr(
+                self, "resolved_solver_key"
+            ) and self.resolved_solver_key.startswith("cvxpy_"):
                 requested_key = self.resolved_solver_key
-                
-                if requested_key == 'cvxpy_scip':
+
+                if requested_key == "cvxpy_scip":
                     # Check if SCIP is available in CVXPY
-                    scip_cls = getattr(cp, 'SCIP', None)
-                    if scip_cls is None or 'SCIP' not in cp.installed_solvers():
+                    scip_cls = getattr(cp, "SCIP", None)
+                    if scip_cls is None or "SCIP" not in cp.installed_solvers():
                         # Also check if pyscipopt is installed
                         try:
                             import pyscipopt
+
                             # Even with pyscipopt, SCIP might not be in CVXPY
-                            if 'SCIP' in cp.installed_solvers():
+                            if "SCIP" in cp.installed_solvers():
                                 scip_cls = cp.SCIP
                                 _solver_chain.append(scip_cls)
                             else:
                                 raise ImportError("SCIP not in CVXPY installed solvers")
                         except ImportError:
                             warnings_list.append(
-                                "SCIP not available — falling back. Install with: pip install pyscipopt"
+                                "SCIP not available — falling back. Install with: pip"
+                                " install pyscipopt"
                             )
                             # Get fallback solver from router
                             from src.solvers.solver_router import resolve_solver
-                            fallback_key, _ = resolve_solver('cvxpy_glpk', self.problem_data)
+
+                            fallback_key, _ = resolve_solver(
+                                "cvxpy_glpk", self.problem_data
+                            )
                             requested_key = fallback_key
                             # Now add the fallback solver
-                            if fallback_key == 'cvxpy_glpk' and hasattr(cp, 'GLPK_MI'):
+                            if fallback_key == "cvxpy_glpk" and hasattr(cp, "GLPK_MI"):
                                 _solver_chain.append(cp.GLPK_MI)
-                            elif fallback_key == 'cvxpy_osqp' and cp.OSQP:
+                            elif fallback_key == "cvxpy_osqp" and cp.OSQP:
                                 _solver_chain.append(cp.OSQP)
                     else:
                         _solver_chain.append(scip_cls)
-                
-                if requested_key == 'cvxpy_osqp':
+
+                if requested_key == "cvxpy_osqp":
                     if cp.OSQP:
                         _solver_chain.append(cp.OSQP)
                     else:
                         warnings_list.append("OSQP not available")
-                
-                elif requested_key == 'cvxpy_glpk':
-                    if hasattr(cp, 'GLPK_MI') and cp.GLPK_MI:
+
+                elif requested_key == "cvxpy_glpk":
+                    if hasattr(cp, "GLPK_MI") and cp.GLPK_MI:
                         _solver_chain.append(cp.GLPK_MI)
                     else:
                         warnings_list.append("GLPK not available")
                         # Fallback to OSQP
                         if cp.OSQP:
                             _solver_chain.append(cp.OSQP)
-            
+
             elif _suggested_solver:
                 # Legacy path for suggested solver
                 _suggested_cls = getattr(cp, _suggested_solver, None)
                 if _suggested_cls:
                     _solver_chain.append(_suggested_cls)
-            
+
             # If no solver in chain, use default CVXPY solver selection
             if not _solver_chain:
                 _solver_chain = [None]  # None means use CVXPY's default
-            
+
             # Try each solver in the chain
             for solver_cls in _solver_chain:
                 try:
                     if solver_cls is None:
                         prob.solve(verbose=False)
-                        solver_used = 'CVXPY default'
+                        solver_used = "CVXPY default"
                     else:
                         # Build solver-specific kwargs for time limits
                         # Each CVXPY solver accepts time limits via different keywords
-                        kwargs = {'solver': solver_cls, 'verbose': False}
-                        
+                        kwargs = {"solver": solver_cls, "verbose": False}
+
                         if max_time is not None and max_time > 0:
-                            solver_name = getattr(solver_cls, '__name__', str(solver_cls)).upper()
-                            
-                            if 'SCIP' in solver_name:
-                                kwargs['scip_params'] = {'limits/time': float(max_time)}
-                            elif 'GLPK' in solver_name:
-                                kwargs['glpk'] = {'tmlim': int(max_time)}
-                            elif 'OSQP' in solver_name:
-                                kwargs['time_limit'] = float(max_time)
-                            elif 'HIGHS' in solver_name:
-                                kwargs['time_limit'] = float(max_time)
-                            elif 'CBC' in solver_name:
-                                kwargs['maximumSeconds'] = int(max_time)
-                            elif 'SCS' in solver_name:
-                                kwargs['time_limit_secs'] = float(max_time)
-                        
+                            solver_name = getattr(
+                                solver_cls, "__name__", str(solver_cls)
+                            ).upper()
+
+                            if "SCIP" in solver_name:
+                                kwargs["scip_params"] = {"limits/time": float(max_time)}
+                            elif "GLPK" in solver_name:
+                                kwargs["glpk"] = {"tmlim": int(max_time)}
+                            elif "OSQP" in solver_name:
+                                kwargs["time_limit"] = float(max_time)
+                            elif "HIGHS" in solver_name:
+                                kwargs["time_limit"] = float(max_time)
+                            elif "CBC" in solver_name:
+                                kwargs["maximumSeconds"] = int(max_time)
+                            elif "SCS" in solver_name:
+                                kwargs["time_limit_secs"] = float(max_time)
+
                         prob.solve(**kwargs)
-                        solver_used = getattr(solver_cls, '__name__', str(solver_cls))
-                    
+                        solver_used = getattr(solver_cls, "__name__", str(solver_cls))
+
                     # Check if solve was successful
-                    if prob.status in ['optimal', 'optimal_inaccurate', 'unbounded_inaccurate']:
+                    if prob.status in [
+                        "optimal",
+                        "optimal_inaccurate",
+                        "unbounded_inaccurate",
+                    ]:
                         solved = True
                         break
-                    elif prob.status in ['infeasible', 'infeasible_inaccurate']:
+                    elif prob.status in ["infeasible", "infeasible_inaccurate"]:
                         # Infeasible is a valid result, not an error
                         solved = True
                         break
                     else:
                         # Status like solver_error, try next solver
                         continue
-                        
+
                 except Exception as e:
                     # Actual error, try next solver
                     continue
-            
+
             # Store which solver actually succeeded
             self.solver_actually_used = solver_used
-            
+
             # If we used a different solver than requested, note it
-            if hasattr(self, 'resolved_solver_key') and self.resolved_solver_key.startswith('cvxpy_'):
-                expected_name = self.resolved_solver_key.replace('cvxpy_', '').upper()
-                if solver_used and expected_name not in solver_used.upper() and solver_used != 'CVXPY default':
-                    warnings_list.append(f"Used {solver_used} solver (requested {expected_name})")
+            if hasattr(
+                self, "resolved_solver_key"
+            ) and self.resolved_solver_key.startswith("cvxpy_"):
+                expected_name = self.resolved_solver_key.replace("cvxpy_", "").upper()
+                if (
+                    solver_used
+                    and expected_name not in solver_used.upper()
+                    and solver_used != "CVXPY default"
+                ):
+                    warnings_list.append(
+                        f"Used {solver_used} solver (requested {expected_name})"
+                    )
 
             solve_time = round(time.time() - start, 4)
 
             # --- map status -----------------------------------------------
-            raw_status = prob.status or 'solver_error'
+            raw_status = prob.status or "solver_error"
             status_label = self._CVXPY_STATUS_MAP.get(raw_status, raw_status)
-            is_optimal = raw_status in ('optimal', 'optimal_inaccurate')
-            
+            is_optimal = raw_status in ("optimal", "optimal_inaccurate")
+
             # Check if we hit time limit (indicated by inaccurate status + time close to limit)
             hit_time_limit = False
             if max_time and solve_time >= (max_time * 0.95):  # Within 95% of time limit
-                if raw_status in ('optimal_inaccurate', 'feasible'):
-                    status_label = 'Feasible (time limit)'
+                if raw_status in ("optimal_inaccurate", "feasible"):
+                    status_label = "Feasible (time limit)"
                     hit_time_limit = True
                     is_optimal = False
 
@@ -622,11 +650,12 @@ class SolverInterface:
             # warnings_list already populated during solver selection
             if hit_time_limit:
                 warnings_list.append(
-                    f'Solver reached time limit of {max_time} seconds. Solution may not be optimal.'
+                    f"Solver reached time limit of {max_time} seconds. Solution may not"
+                    " be optimal."
                 )
-            elif raw_status == 'optimal_inaccurate' and not hit_time_limit:
+            elif raw_status == "optimal_inaccurate" and not hit_time_limit:
                 warnings_list.append(
-                    'Solution is optimal but may be numerically inaccurate.'
+                    "Solution is optimal but may be numerically inaccurate."
                 )
             status_warning = self._STATUS_WARNINGS.get(status_label)
             if status_warning:
@@ -634,13 +663,13 @@ class SolverInterface:
 
             # Try to get MIP gap for time limit cases
             mip_gap = None
-            if hit_time_limit and hasattr(prob, 'solver_stats'):
+            if hit_time_limit and hasattr(prob, "solver_stats"):
                 # Different solvers report gap differently
-                if 'mipgap' in prob.solver_stats:
-                    mip_gap = prob.solver_stats['mipgap']
-                elif 'gap' in prob.solver_stats:
-                    mip_gap = prob.solver_stats['gap']
-            
+                if "mipgap" in prob.solver_stats:
+                    mip_gap = prob.solver_stats["mipgap"]
+                elif "gap" in prob.solver_stats:
+                    mip_gap = prob.solver_stats["gap"]
+
             result = self._empty_result(
                 status=status_label,
                 is_optimal=is_optimal,
@@ -649,20 +678,20 @@ class SolverInterface:
                 num_variables=len(cp_vars),
                 num_constraints=len(cp_cons),
                 solve_time=solve_time,
-                solver_name=f'cvxpy ({solver_used})',
+                solver_name=f"cvxpy ({solver_used})",
                 warnings=warnings_list,
             )
-            
+
             # Add MIP gap if available
             if mip_gap is not None:
-                result['mip_gap'] = mip_gap
-            
+                result["mip_gap"] = mip_gap
+
             return self._maybe_cache_and_return(result)
 
         except Exception as e:
             return self._empty_result(
                 solve_time=round(time.time() - start, 4),
-                solver_name='cvxpy',
+                solver_name="cvxpy",
                 error_message=str(e),
             )
 
@@ -690,11 +719,11 @@ class SolverInterface:
             # SCIP can't read .gz if the compression plugin is missing;
             # decompress to a temp file alongside the original.
             actual_path = mps_path
-            if mps_path.endswith('.gz'):
+            if mps_path.endswith(".gz"):
                 plain = mps_path[:-3]  # strip .gz
                 if not os.path.exists(plain):
-                    with gzip.open(mps_path, 'rb') as fin:
-                        with open(plain, 'wb') as fout:
+                    with gzip.open(mps_path, "rb") as fin:
+                        with open(plain, "wb") as fout:
                             fout.write(fin.read())
                 actual_path = plain
 
@@ -702,7 +731,7 @@ class SolverInterface:
             m.readProblem(actual_path)
 
             if max_time and max_time > 0:
-                m.setParam('limits/time', float(max_time))
+                m.setParam("limits/time", float(max_time))
 
             # Start timing only the optimization
             opt_start = time.time()
@@ -710,16 +739,16 @@ class SolverInterface:
             solve_time = round(time.time() - opt_start, 4)
 
             scip_status = m.getStatus()  # 'optimal', 'timelimit', 'infeasible', …
-            is_optimal = scip_status == 'optimal'
+            is_optimal = scip_status == "optimal"
 
-            if scip_status == 'timelimit':
-                status_label = 'Feasible (time limit)'
-            elif scip_status == 'optimal':
-                status_label = 'Optimal'
-            elif scip_status == 'infeasible':
-                status_label = 'Infeasible'
-            elif scip_status == 'unbounded':
-                status_label = 'Unbounded'
+            if scip_status == "timelimit":
+                status_label = "Feasible (time limit)"
+            elif scip_status == "optimal":
+                status_label = "Optimal"
+            elif scip_status == "infeasible":
+                status_label = "Infeasible"
+            elif scip_status == "unbounded":
+                status_label = "Unbounded"
             else:
                 status_label = scip_status.capitalize()
 
@@ -737,8 +766,8 @@ class SolverInterface:
                 try:
                     mip_gap = m.getGap()
                     warnings_list.append(
-                        f'MIP gap: {mip_gap:.2%}. '
-                        f'Time limit of {max_time}s reached — solution is feasible but may not be optimal.'
+                        f"MIP gap: {mip_gap:.2%}. Time limit of {max_time}s reached —"
+                        " solution is feasible but may not be optimal."
                     )
                 except Exception:
                     pass
@@ -751,18 +780,18 @@ class SolverInterface:
                 num_variables=m.getNVars(),
                 num_constraints=m.getNConss(),
                 solve_time=solve_time,
-                solver_name='PySCIPOpt (SCIP direct)',
+                solver_name="PySCIPOpt (SCIP direct)",
                 warnings=warnings_list,
             )
             if mip_gap is not None:
-                result['mip_gap'] = mip_gap
+                result["mip_gap"] = mip_gap
             return self._maybe_cache_and_return(result)
 
         except Exception as e:
             return self._empty_result(
                 solve_time=round(time.time() - start, 4),
-                solver_name='PySCIPOpt',
-                error_message=f'PySCIPOpt failed: {e}',
+                solver_name="PySCIPOpt",
+                error_message=f"PySCIPOpt failed: {e}",
             )
 
     def get_solver_info(self) -> Dict[str, Any]:
@@ -771,7 +800,7 @@ class SolverInterface:
         return {
             "solver_type": self.solver_type,
             "solver_object": str(self.solver),
-            "available": True  # Could check actual availability
+            "available": True,  # Could check actual availability
         }
 
     @staticmethod
@@ -788,7 +817,7 @@ class SolverInterface:
         """
         if model.status != 1:
             raise ValueError(
-                f"Sensitivity data requires an optimal solution. "
+                "Sensitivity data requires an optimal solution. "
                 f"Current status: {pulp.LpStatus.get(model.status, 'Unknown')} "
                 f"(code {model.status})"
             )
@@ -809,21 +838,21 @@ class SolverInterface:
                 reduced_costs[var.name] = dj
 
             return {
-                'shadow_prices': shadow_prices,
-                'reduced_costs': reduced_costs,
-                'available': True,
+                "shadow_prices": shadow_prices,
+                "reduced_costs": reduced_costs,
+                "available": True,
             }
 
         except (AttributeError, TypeError):
             return {
-                'shadow_prices': {},
-                'reduced_costs': {},
-                'available': False,
-                'note': (
-                    'Sensitivity data not available. The solver did not '
-                    'return dual values (shadow prices / reduced costs). '
-                    'This is common with MIP solvers or when the model '
-                    'uses integer/binary variables.'
+                "shadow_prices": {},
+                "reduced_costs": {},
+                "available": False,
+                "note": (
+                    "Sensitivity data not available. The solver did not "
+                    "return dual values (shadow prices / reduced costs). "
+                    "This is common with MIP solvers or when the model "
+                    "uses integer/binary variables."
                 ),
             }
 
@@ -837,12 +866,14 @@ class SolverInterface:
             "cplex": False,
             "glpk": False,
             "ortools": False,
-            "cvxpy": False
+            "cvxpy": False,
         }
 
-        for name, factory in (("gurobi", pulp.GUROBI_CMD),
-                               ("cplex", pulp.CPLEX_CMD),
-                               ("glpk", pulp.GLPK_CMD)):
+        for name, factory in (
+            ("gurobi", pulp.GUROBI_CMD),
+            ("cplex", pulp.CPLEX_CMD),
+            ("glpk", pulp.GLPK_CMD),
+        ):
             try:
                 if factory(msg=0).available():
                     solvers[name] = True
@@ -861,11 +892,11 @@ class SensitivityAnalyzer:
 
     def analyze_shadow_prices(self) -> Dict[str, Any]:
         """Analyze shadow prices (dual values) of constraints."""
-        if not self.solution.get('is_optimal'):
+        if not self.solution.get("is_optimal"):
             return {"error": "Solution not optimal"}
 
         shadow_prices = {}
-        constraints = self.solution.get('_constraint_detail', {})
+        constraints = self.solution.get("_constraint_detail", {})
         for name, info in constraints.items():
             if info.get("shadow_price") is not None:
                 shadow_prices[name] = {
@@ -877,11 +908,11 @@ class SensitivityAnalyzer:
 
     def analyze_variable_slack(self) -> Dict[str, Any]:
         """Analyze variable slack (distance from bounds)."""
-        if not self.solution.get('is_optimal'):
+        if not self.solution.get("is_optimal"):
             return {"error": "Solution not optimal"}
 
         slack_analysis = {}
-        for name, value in self.solution.get('variables', {}).items():
+        for name, value in self.solution.get("variables", {}).items():
             slack_analysis[name] = {
                 "value": value,
                 "at_bound": value is not None and abs(value) < 1e-6,
@@ -898,9 +929,9 @@ if __name__ == "__main__":
     x = pulp.LpVariable("x", lowBound=0)
     y = pulp.LpVariable("y", lowBound=0)
 
-    prob += 2*x + 3*y, "Cost"
+    prob += 2 * x + 3 * y, "Cost"
     prob += x + y >= 10, "Constraint1"
-    prob += 2*x + y >= 15, "Constraint2"
+    prob += 2 * x + y >= 15, "Constraint2"
 
     # Solve
     solver = SolverInterface("pulp")
@@ -915,5 +946,5 @@ if __name__ == "__main__":
     print(f"  Variables    : {solution['num_variables']}")
     print(f"  Constraints  : {solution['num_constraints']}")
     print("\nVariable values:")
-    for name, value in solution['variables'].items():
+    for name, value in solution["variables"].items():
         print(f"  {name} = {value}")

@@ -17,33 +17,92 @@ class ProblemClassifier:
     """
 
     PROBLEM_TYPES = {
-        "linear_programming": "Linear optimization with continuous variables (e.g., maximize profit from products given resource limits)",
-        "integer_programming": "Optimization where all decision variables must be whole numbers (e.g., how many trucks to buy)",
-        "mixed_integer_programming": "Mix of continuous and integer variables (e.g., factory on/off decisions with production quantities)",
-        "transportation": "Minimize cost of shipping goods from supply points to demand points (e.g., warehouses to stores)",
-        "assignment": "One-to-one matching of agents to tasks at minimum cost (e.g., assign workers to jobs)",
-        "scheduling": "Sequence jobs/tasks over time on machines or resources to meet deadlines (e.g., job-shop scheduling)",
-        "knapsack": "Select items to maximize value without exceeding weight/capacity (e.g., loading a cargo container)",
-        "network_flow": "Optimize flow through a directed graph with capacities (e.g., max flow in a pipeline network)",
-        "routing": "Find optimal vehicle routes to serve customers (e.g., delivery truck route planning)",
-        "cutting_stock": "Cut raw material into required sizes with minimal waste (e.g., cutting rolls of paper or steel bars)",
-        "set_covering": "Select the fewest sets that cover all elements (e.g., minimum fire stations to cover all neighborhoods)",
-        "facility_location": "Decide where to open facilities to minimize cost of serving customers (e.g., warehouse placement)",
-        "portfolio_optimization": "Allocate investments across assets to maximize return for a given risk level",
-        "resource_allocation": "Distribute limited resources across activities to optimize outcome (e.g., budget allocation across projects)",
-        "production_planning": "Decide how much to produce each period to meet demand while minimizing cost (e.g., monthly production schedule)",
-        "blending": "Mix raw materials in optimal proportions to meet quality specs at minimum cost (e.g., animal feed, gasoline blending)",
-        "crew_scheduling": "Assign crew members to shifts or routes satisfying labor rules (e.g., airline pilot scheduling)",
-        "bin_packing": "Pack items into the fewest bins/containers possible (e.g., loading boxes onto pallets)",
-        "traveling_salesman": "Visit all cities exactly once and return home with minimum travel distance",
-        "shortest_path": "Find the least-cost or shortest route between two nodes in a network (e.g., GPS navigation)",
+        "linear_programming": (
+            "Linear optimization with continuous variables (e.g., maximize profit from"
+            " products given resource limits)"
+        ),
+        "integer_programming": (
+            "Optimization where all decision variables must be whole numbers (e.g., how"
+            " many trucks to buy)"
+        ),
+        "mixed_integer_programming": (
+            "Mix of continuous and integer variables (e.g., factory on/off decisions"
+            " with production quantities)"
+        ),
+        "transportation": (
+            "Minimize cost of shipping goods from supply points to demand points (e.g.,"
+            " warehouses to stores)"
+        ),
+        "assignment": (
+            "One-to-one matching of agents to tasks at minimum cost (e.g., assign"
+            " workers to jobs)"
+        ),
+        "scheduling": (
+            "Sequence jobs/tasks over time on machines or resources to meet deadlines"
+            " (e.g., job-shop scheduling)"
+        ),
+        "knapsack": (
+            "Select items to maximize value without exceeding weight/capacity (e.g.,"
+            " loading a cargo container)"
+        ),
+        "network_flow": (
+            "Optimize flow through a directed graph with capacities (e.g., max flow in"
+            " a pipeline network)"
+        ),
+        "routing": (
+            "Find optimal vehicle routes to serve customers (e.g., delivery truck route"
+            " planning)"
+        ),
+        "cutting_stock": (
+            "Cut raw material into required sizes with minimal waste (e.g., cutting"
+            " rolls of paper or steel bars)"
+        ),
+        "set_covering": (
+            "Select the fewest sets that cover all elements (e.g., minimum fire"
+            " stations to cover all neighborhoods)"
+        ),
+        "facility_location": (
+            "Decide where to open facilities to minimize cost of serving customers"
+            " (e.g., warehouse placement)"
+        ),
+        "portfolio_optimization": (
+            "Allocate investments across assets to maximize return for a given risk"
+            " level"
+        ),
+        "resource_allocation": (
+            "Distribute limited resources across activities to optimize outcome (e.g.,"
+            " budget allocation across projects)"
+        ),
+        "production_planning": (
+            "Decide how much to produce each period to meet demand while minimizing"
+            " cost (e.g., monthly production schedule)"
+        ),
+        "blending": (
+            "Mix raw materials in optimal proportions to meet quality specs at minimum"
+            " cost (e.g., animal feed, gasoline blending)"
+        ),
+        "crew_scheduling": (
+            "Assign crew members to shifts or routes satisfying labor rules (e.g.,"
+            " airline pilot scheduling)"
+        ),
+        "bin_packing": (
+            "Pack items into the fewest bins/containers possible (e.g., loading boxes"
+            " onto pallets)"
+        ),
+        "traveling_salesman": (
+            "Visit all cities exactly once and return home with minimum travel distance"
+        ),
+        "shortest_path": (
+            "Find the least-cost or shortest route between two nodes in a network"
+            " (e.g., GPS navigation)"
+        ),
     }
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         provider: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ):
         """
         Initialize the classifier with AI API.
@@ -58,16 +117,35 @@ class ProblemClassifier:
         self.last_api_metadata = None
 
     REQUIRED_KEYS = [
-        "problem_type", "objective", "objective_description",
-        "decision_variables", "constraints", "parameters",
-        "confidence", "assumptions", "warnings", "notes"
+        "problem_type",
+        "objective",
+        "objective_description",
+        "decision_variables",
+        "constraints",
+        "parameters",
+        "confidence",
+        "assumptions",
+        "warnings",
+        "notes",
     ]
 
     _FALLBACK_PROBLEM_TYPES = {"unknown", "general", "other"}
 
     _NON_PROBLEM_WORDS = {
-        "clear", "test", "hello", "hi", "ok", "yes", "no",
-        "exit", "quit", "help", "?", "...", "asd", "asdf",
+        "clear",
+        "test",
+        "hello",
+        "hi",
+        "ok",
+        "yes",
+        "no",
+        "exit",
+        "quit",
+        "help",
+        "?",
+        "...",
+        "asd",
+        "asdf",
     }
 
     @classmethod
@@ -88,14 +166,19 @@ class ProblemClassifier:
     _SAFE_DEFAULT: Dict[str, Any] = {
         "problem_type": "unknown",
         "objective": "minimize",
-        "objective_description": "Not identified — input was too short or not a valid problem description.",
+        "objective_description": (
+            "Not identified — input was too short or not a valid problem description."
+        ),
         "decision_variables": [],
         "constraints": [],
         "parameters": {},
         "confidence": 0.0,
         "assumptions": [],
         "warnings": ["Input does not appear to be an optimization problem."],
-        "notes": "Provide a detailed problem description with objectives, constraints, and data.",
+        "notes": (
+            "Provide a detailed problem description with objectives, constraints, and"
+            " data."
+        ),
     }
 
     def classify(self, problem_description: str) -> Dict[str, Any]:
@@ -128,13 +211,11 @@ class ProblemClassifier:
 
         try:
             response = self.api_client.create_message(
-                messages=messages,
-                max_tokens=4096,
-                temperature=0.3
+                messages=messages, max_tokens=4096, temperature=0.3
             )
-            result_text = response['content']
-            total_input_tokens += response['usage']['input_tokens']
-            total_output_tokens += response['usage']['output_tokens']
+            result_text = response["content"]
+            total_input_tokens += response["usage"]["input_tokens"]
+            total_output_tokens += response["usage"]["output_tokens"]
 
             result = self._parse_json(result_text)
 
@@ -142,23 +223,24 @@ class ProblemClassifier:
             try:
                 retry_messages = messages + [
                     {"role": "assistant", "content": result_text},
-                    {"role": "user", "content": (
-                        "Your previous response was not valid JSON. "
-                        "Return ONLY the JSON object with no other text."
-                    )}
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous response was not valid JSON. "
+                            "Return ONLY the JSON object with no other text."
+                        ),
+                    },
                 ]
                 retry_response = self.api_client.create_message(
-                    messages=retry_messages,
-                    max_tokens=4096,
-                    temperature=0
+                    messages=retry_messages, max_tokens=4096, temperature=0
                 )
-                total_input_tokens += retry_response['usage']['input_tokens']
-                total_output_tokens += retry_response['usage']['output_tokens']
-                result = self._parse_json(retry_response['content'])
+                total_input_tokens += retry_response["usage"]["input_tokens"]
+                total_output_tokens += retry_response["usage"]["output_tokens"]
+                result = self._parse_json(retry_response["content"])
             except Exception as retry_err:
                 raise RuntimeError(
-                    f"Classification failed — could not parse JSON even after retry: {retry_err}\n"
-                    f"Original response preview: {result_text[:200]}..."
+                    "Classification failed — could not parse JSON even after retry:"
+                    f" {retry_err}\nOriginal response preview: {result_text[:200]}..."
                 )
         except Exception as e:
             raise RuntimeError(f"Classification failed: {e}")
@@ -166,13 +248,13 @@ class ProblemClassifier:
         self._validate_classification(result)
 
         self.last_api_metadata = {
-            'provider': self.api_client.get_provider_name(),
-            'model': response.get('model', self.model),
-            'usage': {
-                'input_tokens': total_input_tokens,
-                'output_tokens': total_output_tokens,
-                'total_tokens': total_input_tokens + total_output_tokens,
-            }
+            "provider": self.api_client.get_provider_name(),
+            "model": response.get("model", self.model),
+            "usage": {
+                "input_tokens": total_input_tokens,
+                "output_tokens": total_output_tokens,
+                "total_tokens": total_input_tokens + total_output_tokens,
+            },
         }
 
         return result
@@ -203,7 +285,7 @@ class ProblemClassifier:
         last = text.rfind("}")
         if first != -1 and last != -1 and last > first:
             try:
-                return json.loads(text[first:last + 1])
+                return json.loads(text[first : last + 1])
             except json.JSONDecodeError:
                 pass
 
@@ -235,13 +317,21 @@ class ProblemClassifier:
                 f"must be one of: {', '.join(self.PROBLEM_TYPES.keys())}"
             )
 
-        if "objective" in result and result["objective"] not in ("minimize", "maximize"):
-            errors.append(f"objective must be 'minimize' or 'maximize', got '{result['objective']}'")
+        if "objective" in result and result["objective"] not in (
+            "minimize",
+            "maximize",
+        ):
+            errors.append(
+                "objective must be 'minimize' or 'maximize', got"
+                f" '{result['objective']}'"
+            )
 
         if "confidence" in result:
             conf = result["confidence"]
             if not isinstance(conf, (int, float)) or not (0.0 <= conf <= 1.0):
-                errors.append(f"confidence must be a float between 0.0 and 1.0, got {conf!r}")
+                errors.append(
+                    f"confidence must be a float between 0.0 and 1.0, got {conf!r}"
+                )
 
         if "decision_variables" in result:
             if not isinstance(result["decision_variables"], list):
@@ -282,7 +372,10 @@ class ProblemClassifier:
                     if "confidence" in a:
                         ac = a["confidence"]
                         if not isinstance(ac, (int, float)) or not (0.0 <= ac <= 1.0):
-                            errors.append(f"assumptions[{i}].confidence must be 0.0–1.0, got {ac!r}")
+                            errors.append(
+                                f"assumptions[{i}].confidence must be 0.0–1.0, got"
+                                f" {ac!r}"
+                            )
                     if a.get("impact") not in self._VALID_IMPACTS:
                         errors.append(
                             f"assumptions[{i}].impact must be one of "
@@ -293,15 +386,16 @@ class ProblemClassifier:
             errors.append("warnings must be a list")
 
         if errors:
-            raise ValueError("Classification validation failed:\n  - " + "\n  - ".join(errors))
+            raise ValueError(
+                "Classification validation failed:\n  - " + "\n  - ".join(errors)
+            )
 
     def _build_classification_prompt(self, description: str) -> str:
         """Build the prompt for AI to classify the problem."""
 
-        problem_types_list = "\n".join([
-            f"- {key}: {value}"
-            for key, value in self.PROBLEM_TYPES.items()
-        ])
+        problem_types_list = "\n".join(
+            [f"- {key}: {value}" for key, value in self.PROBLEM_TYPES.items()]
+        )
 
         prompt = f"""You are an expert in Operations Research. Analyze the following problem description.
 
@@ -400,20 +494,16 @@ Return ONLY the JSON object, no additional text or markdown formatting.
                 "objective_coefficients": [],
                 "constraint_coefficients": [],
                 "constraint_bounds": [],
-                "variable_bounds": []
+                "variable_bounds": [],
             },
             "transportation": {
                 "sources": [],
                 "destinations": [],
                 "supply": [],
                 "demand": [],
-                "costs": []
+                "costs": [],
             },
-            "assignment": {
-                "agents": [],
-                "tasks": [],
-                "costs": []
-            }
+            "assignment": {"agents": [], "tasks": [], "costs": []},
             # Add more templates as needed
         }
 

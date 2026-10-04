@@ -38,7 +38,9 @@ class DataExtractor:
         model: Optional[str] = None,
     ):
         self.api_client = APIClient(
-            provider=provider, api_key=api_key, model=model,
+            provider=provider,
+            api_key=api_key,
+            model=model,
         )
 
     # ------------------------------------------------------------------
@@ -48,8 +50,8 @@ class DataExtractor:
     def extract(
         self,
         parsed_file_data: Dict[str, Any],
-        user_hint: str = '',
-        filename: str = '',
+        user_hint: str = "",
+        filename: str = "",
     ) -> Dict[str, Any]:
         """
         Analyse parsed file content and return a classifier-compatible dict.
@@ -64,9 +66,9 @@ class DataExtractor:
             A dict with all ``ProblemClassifier`` keys plus ``source``,
             ``filename``, and ``data_summary``.
         """
-        if parsed_file_data.get('type') == 'error':
+        if parsed_file_data.get("type") == "error":
             return self._error_result(
-                parsed_file_data.get('error', 'File parsing failed'),
+                parsed_file_data.get("error", "File parsing failed"),
                 filename,
             )
 
@@ -79,22 +81,25 @@ class DataExtractor:
                 max_tokens=4096,
                 temperature=0.3,
             )
-            result = self._parse_json(response['content'])
+            result = self._parse_json(response["content"])
         except (json.JSONDecodeError, ValueError):
             try:
                 retry_messages = messages + [
-                    {"role": "assistant", "content": response['content']},
-                    {"role": "user", "content": (
-                        "Your previous response was not valid JSON. "
-                        "Return ONLY the JSON object with no other text."
-                    )},
+                    {"role": "assistant", "content": response["content"]},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous response was not valid JSON. "
+                            "Return ONLY the JSON object with no other text."
+                        ),
+                    },
                 ]
                 retry_response = self.api_client.create_message(
                     messages=retry_messages,
                     max_tokens=4096,
                     temperature=0,
                 )
-                result = self._parse_json(retry_response['content'])
+                result = self._parse_json(retry_response["content"])
             except Exception as retry_err:
                 return self._error_result(
                     f"AI JSON parsing failed after retry: {retry_err}",
@@ -105,8 +110,8 @@ class DataExtractor:
 
         merged = self._merge_with_defaults(result)
         merged = self._add_raw_data_to_parameters(merged, parsed_file_data)
-        merged['source'] = 'file_upload'
-        merged['filename'] = filename
+        merged["source"] = "file_upload"
+        merged["filename"] = filename
         return merged
 
     # ------------------------------------------------------------------
@@ -126,7 +131,7 @@ class DataExtractor:
             "identify the optimisation problem it represents."
         )
 
-        raw = parsed.get('raw_text', '')
+        raw = parsed.get("raw_text", "")
         if raw:
             truncated = raw[:3000]
             if len(raw) > 3000:
@@ -147,31 +152,29 @@ class DataExtractor:
     @staticmethod
     def _format_table_preview(parsed: Dict[str, Any]) -> str:
         """Format column headers + first 5 rows for each sheet (Excel/CSV)."""
-        ftype = parsed.get('type', '')
-        if ftype not in ('excel', 'csv'):
-            return ''
+        ftype = parsed.get("type", "")
+        if ftype not in ("excel", "csv"):
+            return ""
 
         parts: List[str] = []
-        for sheet in parsed.get('sheets', []):
-            name = sheet.get('name', 'Sheet')
-            headers = sheet.get('headers', [])
-            rows = sheet.get('rows', [])
+        for sheet in parsed.get("sheets", []):
+            name = sheet.get("name", "Sheet")
+            headers = sheet.get("headers", [])
+            rows = sheet.get("rows", [])
             if not headers:
                 continue
 
             parts.append(f"Sheet: {name}")
-            parts.append(' | '.join(str(h) for h in headers))
-            parts.append('-+-'.join('-' * max(len(str(h)), 3) for h in headers))
+            parts.append(" | ".join(str(h) for h in headers))
+            parts.append("-+-".join("-" * max(len(str(h)), 3) for h in headers))
             for row in rows[:5]:
-                parts.append(
-                    ' | '.join(str(row.get(h, '')) for h in headers)
-                )
+                parts.append(" | ".join(str(row.get(h, "")) for h in headers))
             remaining = len(rows) - 5
             if remaining > 0:
                 parts.append(f"... ({remaining} more rows)")
-            parts.append('')
+            parts.append("")
 
-        return '\n'.join(parts)
+        return "\n".join(parts)
 
     @staticmethod
     def _json_instructions() -> str:
@@ -257,32 +260,34 @@ class DataExtractor:
         This is the safety net — if the AI used wrong key names, the model
         generator can read from these guaranteed keys instead.
         """
-        params = merged.setdefault('parameters', {})
-        file_type = parsed_file_data.get('type', '')
+        params = merged.setdefault("parameters", {})
+        file_type = parsed_file_data.get("type", "")
 
-        if file_type in ('csv', 'excel'):
-            sheets = parsed_file_data.get('sheets', [])
+        if file_type in ("csv", "excel"):
+            sheets = parsed_file_data.get("sheets", [])
             if sheets:
                 sheet = sheets[0]
-                rows = sheet.get('rows', [])
-                headers = sheet.get('headers', [])
-                params['_raw_headers'] = headers
-                params['_raw_rows'] = rows  # list of dicts {col: value}
+                rows = sheet.get("rows", [])
+                headers = sheet.get("headers", [])
+                params["_raw_headers"] = headers
+                params["_raw_rows"] = rows  # list of dicts {col: value}
 
                 # For transportation CSVs: try to auto-extract supply/demand/costs
                 # from structure if AI didn't produce them with correct keys
-                if merged.get('problem_type') == 'transportation':
-                    if (not params.get('supply')
-                            or not params.get('demand')
-                            or not params.get('costs')):
+                if merged.get("problem_type") == "transportation":
+                    if (
+                        not params.get("supply")
+                        or not params.get("demand")
+                        or not params.get("costs")
+                    ):
                         auto = self._auto_extract_transportation(headers, rows)
                         for k, v in auto.items():
                             if v and not params.get(k):
                                 params[k] = v
 
-        elif file_type == 'docx':
-            params['_raw_paragraphs'] = parsed_file_data.get('paragraphs', [])
-            params['_raw_tables'] = parsed_file_data.get('tables', [])
+        elif file_type == "docx":
+            params["_raw_paragraphs"] = parsed_file_data.get("paragraphs", [])
+            params["_raw_tables"] = parsed_file_data.get("tables", [])
 
         return merged
 
@@ -306,15 +311,26 @@ class DataExtractor:
         dest_names: List[str] = []
 
         demand_labels = {
-            'demand', 'demands', 'requirement', 'requirements',
-            'need', 'needed', 'consumption', 'required',
+            "demand",
+            "demands",
+            "requirement",
+            "requirements",
+            "need",
+            "needed",
+            "consumption",
+            "required",
         }
 
         # Identify which columns are cost columns (not name col, not supply col)
         # Supply column: last column named 'supply', 'capacity', 'available', etc.
         supply_col_names = {
-            'supply', 'capacity', 'available', 'stock',
-            'production', 'max', 'maximum',
+            "supply",
+            "capacity",
+            "available",
+            "stock",
+            "production",
+            "max",
+            "maximum",
         }
         supply_col = None
         for h in reversed(headers):
@@ -332,7 +348,7 @@ class DataExtractor:
         dest_names = [str(c) for c in cost_cols]
 
         for row in rows:
-            name_val = str(row.get(name_col, '')).lower().strip()
+            name_val = str(row.get(name_col, "")).lower().strip()
 
             if name_val in demand_labels:
                 # This is the demand row
@@ -345,7 +361,7 @@ class DataExtractor:
                         pass
             else:
                 # This is a supply row
-                source_names.append(str(row.get(name_col, f'source_{len(supply)}')))
+                source_names.append(str(row.get(name_col, f"source_{len(supply)}")))
                 row_costs: List[float] = []
                 for col in cost_cols:
                     v = row.get(col)
@@ -363,11 +379,11 @@ class DataExtractor:
                     pass
 
         return {
-            'supply': supply or None,
-            'demand': demand or None,
-            'costs': costs or None,
-            'source_names': source_names or None,
-            'dest_names': dest_names or None,
+            "supply": supply or None,
+            "demand": demand or None,
+            "costs": costs or None,
+            "source_names": source_names or None,
+            "dest_names": dest_names or None,
         }
 
     # ------------------------------------------------------------------
@@ -393,7 +409,7 @@ class DataExtractor:
         last = text.rfind("}")
         if first != -1 and last > first:
             try:
-                return json.loads(text[first:last + 1])
+                return json.loads(text[first : last + 1])
             except json.JSONDecodeError:
                 pass
 
@@ -410,10 +426,10 @@ class DataExtractor:
             if value is not None:
                 merged[key] = value
         # If objective still None after merge, default to minimize with a warning
-        if not merged.get('objective'):
-            merged['objective'] = 'minimize'
-            merged.setdefault('warnings', []).append(
-                'Objective sense not detected — defaulted to minimize.'
+        if not merged.get("objective"):
+            merged["objective"] = "minimize"
+            merged.setdefault("warnings", []).append(
+                "Objective sense not detected — defaulted to minimize."
             )
         return merged
 
@@ -423,17 +439,19 @@ class DataExtractor:
         filename: str,
     ) -> Dict[str, Any]:
         result = dict(self._CLASSIFIER_DEFAULTS)
-        result['objective'] = 'minimize'  # safe default for error paths
-        result.update({
-            'source': 'file_upload',
-            'filename': filename,
-            'confidence': 0.0,
-            'warnings': [error_msg],
-            'notes': 'Extraction failed — try pasting the problem text directly.',
-            'data_summary': {
-                'num_rows': 0,
-                'num_columns': 0,
-                'detected_structure': 'error',
-            },
-        })
+        result["objective"] = "minimize"  # safe default for error paths
+        result.update(
+            {
+                "source": "file_upload",
+                "filename": filename,
+                "confidence": 0.0,
+                "warnings": [error_msg],
+                "notes": "Extraction failed — try pasting the problem text directly.",
+                "data_summary": {
+                    "num_rows": 0,
+                    "num_columns": 0,
+                    "detected_structure": "error",
+                },
+            }
+        )
         return result
