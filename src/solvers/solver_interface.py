@@ -587,6 +587,14 @@ class SolverInterface:
                 if s not in _installed:
                     warnings_list.append(f"{s} not installed — skipped")
             _solver_chain = [s for s in _solver_chain if s in _installed]
+            # OSQP is a QP solver; on linear objectives it is the wrong tool and
+            # its Linux wheels can segfault (uncatchable) during setup, so let
+            # CVXPY pick an LP solver instead.
+            if cp.OSQP in _solver_chain and prob.objective.expr.is_affine():
+                _solver_chain.remove(cp.OSQP)
+                warnings_list.append(
+                    "OSQP skipped for a linear objective; used CVXPY's LP solver."
+                )
             # Always finish with CVXPY's own choice (None) so a missing or
             # failing solver (e.g. OSQP on an integer model) isn't fatal.
             _solver_chain.append(None)
