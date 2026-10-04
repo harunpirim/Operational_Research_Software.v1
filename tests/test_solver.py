@@ -150,3 +150,22 @@ def test_cvxpy_falls_back_when_solver_cannot_handle_integers():
 
     assert solution["is_optimal"]
     assert solution["objective_value"] == pytest.approx(5.0, abs=1e-4)
+
+
+def test_osqp_quadratic_objective_after_pulp_import():
+    """A QP (e.g. portfolio risk) solves with OSQP in a process that imported PuLP.
+
+    PuLP 3.3.1+ preloads highspy with RTLD_GLOBAL, after which OSQP segfaults
+    on Linux; requirements.txt pins pulp<3.3.1. This module imports pulp first.
+    """
+    import cvxpy as cp
+
+    x = cp.Variable(2, name="x")
+    prob = cp.Problem(cp.Minimize(cp.sum_squares(x - 1)), [cp.sum(x) == 1, x >= 0])
+    solution = SolverInterface("cvxpy_osqp").solve(
+        {"type": "cvxpy", "problem": prob, "variables": {"x": x}}
+    )
+
+    assert solution["status"].startswith("Optimal")
+    assert "OSQP" in solution["solver_name"]
+    assert solution["objective_value"] == pytest.approx(0.5, abs=1e-3)
