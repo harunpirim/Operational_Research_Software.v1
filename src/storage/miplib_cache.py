@@ -11,7 +11,6 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from pathlib import Path
 
 
 class MIPLIBCache:
@@ -113,8 +112,8 @@ class MIPLIBCache:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO miplib_cache 
-                (instance_name, objective_value, solution_json, solver_used, 
+                INSERT OR REPLACE INTO miplib_cache
+                (instance_name, objective_value, solution_json, solver_used,
                  original_solve_time, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
@@ -145,9 +144,9 @@ class MIPLIBCache:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
-                SELECT instance_name, objective_value, solver_used, 
-                       original_solve_time, timestamp 
-                FROM miplib_cache 
+                SELECT instance_name, objective_value, solver_used,
+                       original_solve_time, timestamp
+                FROM miplib_cache
                 ORDER BY timestamp DESC
             """)
             rows = cursor.fetchall()
@@ -178,12 +177,12 @@ class MIPLIBCache:
             try:
                 file_size = os.path.getsize(self.db_path)
                 size_mb = file_size / (1024 * 1024)
-            except:
+            except Exception:
                 size_mb = 0
 
             # Get date range
             cursor = conn.execute("""
-                SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest 
+                SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest
                 FROM miplib_cache
             """)
             row = cursor.fetchone()

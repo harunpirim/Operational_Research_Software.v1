@@ -62,7 +62,7 @@ _TOOLBAR_OR_FULL = r"""<div class="or-toolbar" id="toolbar">
       <button class="tb-btn" data-cmd='["insert","\\sum_{i=1}^{m}x_{ij}=d_{j}"]' data-tip="Demand constraint" style="font-size:11px">Demand</button>
       <button class="tb-btn" data-cmd='["insert","\\sum_{i=1}^{n}w_{i}x_{i}\\leq W"]' data-tip="Knapsack capacity" style="font-size:11px">Knapsack</button>
     </div>
-  </div>"""
+  </div>"""  # noqa: E501
 
 _TOOLBAR_MINIMAL = r"""<div class="or-toolbar" id="toolbar">
     <div class="or-toolbar-section">

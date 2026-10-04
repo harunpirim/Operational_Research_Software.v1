@@ -3,10 +3,45 @@ Solver Interface - Unified interface for different OR solvers
 """
 
 from typing import Dict, Any, Optional
+import functools
 import pulp
 import time
 from enum import Enum
 from .solver_router import get_solver_display_name
+
+
+@functools.lru_cache(maxsize=1)
+def _cbc_runs() -> bool:
+    """
+    Check that PuLP's bundled CBC binary can actually execute.
+
+    ``PULP_CBC_CMD.available()`` only checks that the file exists; on Apple
+    Silicon without Rosetta the bundled x86_64 binary exists but fails with
+    "Bad CPU type in executable", so we probe with a one-variable problem.
+    """
+    try:
+        probe = pulp.LpProblem("cbc_probe", pulp.LpMinimize)
+        x = pulp.LpVariable("x", lowBound=0)
+        probe += x
+        probe += x >= 1
+        probe.solve(pulp.PULP_CBC_CMD(msg=0))
+        return probe.status == 1
+    except Exception:
+        return False
+
+
+def default_pulp_solver(msg: int = 0):
+    """
+    Return the default PuLP solver: CBC when it runs on this machine,
+    otherwise HiGHS (native wheel via ``highspy``).
+    """
+    if _cbc_runs():
+        return pulp.PULP_CBC_CMD(msg=msg)
+    highs = pulp.HiGHS(msg=bool(msg))
+    if highs.available():
+        return highs
+    # Nothing better available; let the CBC error surface at solve time.
+    return pulp.PULP_CBC_CMD(msg=msg)
 
 
 class SolverStatus(Enum):
@@ -59,7 +94,7 @@ class SolverInterface:
 
         # Handle new solver key format
         if st == "pulp_cbc" or st in ("pulp", "cbc"):
-            return pulp.PULP_CBC_CMD(msg=0)
+            return default_pulp_solver()
 
         if st.startswith("cvxpy_") or st == "cvxpy":
             return None  # no PuLP solver needed; _solve_with_cvxpy handles it
@@ -88,16 +123,16 @@ class SolverInterface:
 
         if st == "auto-detect" or st == "auto":
             # Auto-detect is now handled by solver_router
-            return pulp.PULP_CBC_CMD(msg=0)
+            return default_pulp_solver()
 
         if st in ("or-tools", "ortools"):
             self._ui_info(
                 "OR-Tools selected — using PuLP CBC (OR-Tools integration coming soon)."
             )
             self.solver_type = "pulp"
-            return pulp.PULP_CBC_CMD(msg=0)
+            return default_pulp_solver()
 
-        return pulp.PULP_CBC_CMD(msg=0)
+        return default_pulp_solver()
 
     def _auto_detect_solver(self):
         """
@@ -119,7 +154,7 @@ class SolverInterface:
                 continue
         self.solver_type = "pulp"
         print("INFO: Auto-detect — using default PuLP CBC solver.")
-        return pulp.PULP_CBC_CMD(msg=0)
+        return default_pulp_solver()
 
     @staticmethod
     def _ui_info(message: str) -> None:
@@ -332,7 +367,15 @@ class SolverInterface:
             ):
                 warnings_list.append(self.resolved_explanation)
 
+            overrides = {}
+            if isinstance(self.solver, pulp.HiGHS):
+                overrides["solver_name"] = "PuLP HiGHS"
+                warnings_list.append(
+                    "CBC cannot run on this machine; solved with HiGHS instead."
+                )
+
             result = self._empty_result(
+                **overrides,
                 status=status_label,
                 is_optimal=is_optimal,
                 objective_value=objective_value,
@@ -419,29 +462,27 @@ class SolverInterface:
             # --- convert PuLP → CVXPY ------------------------------------
             if prob is None and isinstance(model, pulp.LpProblem):
                 cp_vars = {}
+                bound_cons = []
                 for v in model.variables():
-                    nonneg = v.lowBound is not None and v.lowBound >= 0
-                    if v.cat == "Integer":
-                        cp_vars[v.name] = cp.Variable(
-                            name=v.name,
-                            integer=True,
-                            nonneg=nonneg,
-                        )
-                    elif v.cat == "Binary":
+                    if v.cat == "Binary":
                         cp_vars[v.name] = cp.Variable(
                             name=v.name,
                             boolean=True,
                         )
-                    else:
-                        cp_vars[v.name] = cp.Variable(
-                            name=v.name,
-                            nonneg=nonneg,
-                        )
+                        continue
+                    cvar = cp.Variable(
+                        name=v.name,
+                        integer=(v.cat == "Integer"),
+                    )
+                    cp_vars[v.name] = cvar
+                    if v.lowBound is not None:
+                        bound_cons.append(cvar >= float(v.lowBound))
+                    if v.upBound is not None:
+                        bound_cons.append(cvar <= float(v.upBound))
 
-                # objective
-                obj_expr = sum(
-                    float(model.objective.get(v, 0)) * cp_vars[v.name]
-                    for v in model.variables()
+                # objective (iterate only the terms present, keep the constant)
+                obj_expr = float(model.objective.constant or 0) + sum(
+                    float(coef) * cp_vars[v.name] for v, coef in model.objective.items()
                 )
                 if model.sense == pulp.constants.LpMaximize:
                     cp_obj = cp.Maximize(obj_expr)
@@ -451,10 +492,7 @@ class SolverInterface:
                 # constraints
                 cp_cons = []
                 for cname, cobj in model.constraints.items():
-                    lhs = sum(
-                        float(cobj.get(v, 0)) * cp_vars[v.name]
-                        for v in model.variables()
-                    )
+                    lhs = sum(float(coef) * cp_vars[v.name] for v, coef in cobj.items())
                     rhs = -float(cobj.constant)
                     sense = cobj.sense
                     if sense == pulp.constants.LpConstraintLE:
@@ -464,7 +502,9 @@ class SolverInterface:
                     else:
                         cp_cons.append(lhs == rhs)
 
-                prob = cp.Problem(cp_obj, cp_cons)
+                # bound constraints are kept out of cp_cons so the reported
+                # constraint count matches the original model
+                prob = cp.Problem(cp_obj, cp_cons + bound_cons)
 
             if prob is None:
                 return self._empty_result(
@@ -474,7 +514,6 @@ class SolverInterface:
                 )
 
             # --- solve with proper solver availability checking -----------
-            solved = False
             solver_used = ""
             warnings_list = []
 
@@ -492,7 +531,7 @@ class SolverInterface:
                     if scip_cls is None or "SCIP" not in cp.installed_solvers():
                         # Also check if pyscipopt is installed
                         try:
-                            import pyscipopt
+                            import pyscipopt  # noqa: F401  (availability check)
 
                             # Even with pyscipopt, SCIP might not be in CVXPY
                             if "SCIP" in cp.installed_solvers():
@@ -541,9 +580,16 @@ class SolverInterface:
                 if _suggested_cls:
                     _solver_chain.append(_suggested_cls)
 
-            # If no solver in chain, use default CVXPY solver selection
-            if not _solver_chain:
-                _solver_chain = [None]  # None means use CVXPY's default
+            # cp.OSQP / cp.GLPK_MI are plain name strings and always truthy, so
+            # drop any solver CVXPY can't actually use.
+            _installed = set(cp.installed_solvers())
+            for s in _solver_chain:
+                if s not in _installed:
+                    warnings_list.append(f"{s} not installed — skipped")
+            _solver_chain = [s for s in _solver_chain if s in _installed]
+            # Always finish with CVXPY's own choice (None) so a missing or
+            # failing solver (e.g. OSQP on an integer model) isn't fatal.
+            _solver_chain.append(None)
 
             # Try each solver in the chain
             for solver_cls in _solver_chain:
@@ -583,17 +629,15 @@ class SolverInterface:
                         "optimal_inaccurate",
                         "unbounded_inaccurate",
                     ]:
-                        solved = True
                         break
                     elif prob.status in ["infeasible", "infeasible_inaccurate"]:
                         # Infeasible is a valid result, not an error
-                        solved = True
                         break
                     else:
                         # Status like solver_error, try next solver
                         continue
 
-                except Exception as e:
+                except Exception:
                     # Actual error, try next solver
                     continue
 

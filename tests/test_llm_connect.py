@@ -8,6 +8,7 @@ import pulp
 import pytest
 
 from src.modeling.model_generator import ModelGenerator
+from src.solvers.solver_interface import default_pulp_solver
 
 
 def _build_api_mock(content: str) -> Mock:
@@ -22,7 +23,7 @@ def _build_api_mock(content: str) -> Mock:
 
 def _widget_problem_data() -> dict:
     return {
-        "problem_type": "integer_programming",
+        "problem_type": "production_planning",
         "objective": "maximize",
         "objective_description": "profit from producing widgets",
         "decision_variables": ["number of widgets to produce"],
@@ -63,7 +64,7 @@ def create_model():
     assert validation["num_variables"] == 1
     assert validation["num_constraints"] == 2
 
-    model.solve(pulp.PULP_CBC_CMD(msg=0))
+    model.solve(default_pulp_solver())
     assert pulp.LpStatus[model.status] == "Optimal"
     assert pulp.value(model.objective) == 2000
     assert model.variables()[0].varValue == 40
@@ -72,7 +73,7 @@ def create_model():
     prompt = generator.api_client.create_message.call_args.kwargs["messages"][0][
         "content"
     ]
-    assert "Problem Type: integer_programming" in prompt
+    assert '"problem_type": "production_planning"' in prompt
     assert "profit from producing widgets" in prompt
 
 
@@ -83,7 +84,7 @@ def test_non_template_problem_requires_ai_api():
     with pytest.raises(
         ValueError, match="AI API not configured for dynamic model generation"
     ):
-        generator.generate({"problem_type": "linear_programming"})
+        generator.generate({"problem_type": "scheduling", "confidence": 0.9})
 
 
 def test_transportation_uses_template_and_skips_ai():
@@ -93,6 +94,7 @@ def test_transportation_uses_template_and_skips_ai():
     model = generator.generate(
         {
             "problem_type": "transportation",
+            "confidence": 0.95,
             "parameters": {
                 "supply": [100, 150],
                 "demand": [80, 120],
@@ -103,9 +105,11 @@ def test_transportation_uses_template_and_skips_ai():
 
     validation = generator.validate_model(model)
 
+    # Supply (250) > demand (200), so a zero-cost dummy destination is added:
+    # 2 sources x 3 destinations = 6 variables, 2 + 3 = 5 constraints.
     assert validation["valid"] is True
-    assert validation["num_variables"] == 4
-    assert validation["num_constraints"] == 4
+    assert validation["num_variables"] == 6
+    assert validation["num_constraints"] == 5
     generator.api_client.create_message.assert_not_called()
 
 

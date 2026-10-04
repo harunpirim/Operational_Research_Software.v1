@@ -7,7 +7,6 @@ from the SolverInterface which only needs to know how to call a specific solver.
 """
 
 from typing import Dict, Any, Tuple, List
-import warnings
 
 
 def resolve_solver(solver_key: str, problem_data: Dict[str, Any]) -> Tuple[str, str]:
@@ -226,7 +225,7 @@ def _get_available_solvers() -> List[str]:
         # Also check for pyscipopt separately
         if "cvxpy_scip" not in available:
             try:
-                import pyscipopt
+                import pyscipopt  # noqa: F401  (availability check)
 
                 if "SCIP" in cvxpy_solvers:
                     available.append("cvxpy_scip")

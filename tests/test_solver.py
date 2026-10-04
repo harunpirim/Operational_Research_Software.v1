@@ -23,7 +23,7 @@ def test_list_available_solvers():
     solvers = SolverInterface.list_available_solvers()
     assert isinstance(solvers, dict)
     assert "pulp_cbc" in solvers
-    assert solvers["pulp_cbc"] == True  # PuLP should always be available
+    assert solvers["pulp_cbc"]  # PuLP should always be available
 
 
 def test_solve_simple_lp():
@@ -120,3 +120,33 @@ def test_transportation_problem_solve():
 
     assert solution["status"] == SolverStatus.OPTIMAL.value
     assert solution["objective_value"] is not None
+
+
+def _bounded_problem(cat="Continuous"):
+    """max y - z + 4 with y in [0, 3.5], z in [2, 5]: optimum 5.5 (5 if y integer)."""
+    prob = pulp.LpProblem("Bounded", pulp.LpMaximize)
+    y = pulp.LpVariable("y", lowBound=0, upBound=3.5, cat=cat)
+    z = pulp.LpVariable("z", lowBound=2, upBound=5)
+    prob += y - z + 4
+    prob += y + z <= 100, "Loose"
+    return prob
+
+
+@pytest.mark.parametrize("solver_key", ["cvxpy_osqp", "cvxpy"])
+def test_cvxpy_conversion_keeps_bounds_and_constant(solver_key):
+    """PuLP -> CVXPY conversion must keep variable bounds and the objective constant."""
+    solution = SolverInterface(solver_key).solve(_bounded_problem())
+
+    assert solution["is_optimal"]
+    assert solution["objective_value"] == pytest.approx(5.5, abs=1e-4)
+    assert solution["variables"]["y"] == pytest.approx(3.5, abs=1e-4)
+    assert solution["variables"]["z"] == pytest.approx(2.0, abs=1e-4)
+    assert solution["num_constraints"] == 1
+
+
+def test_cvxpy_falls_back_when_solver_cannot_handle_integers():
+    """OSQP can't solve MIPs; the CVXPY path should fall back rather than error."""
+    solution = SolverInterface("cvxpy_osqp").solve(_bounded_problem("Integer"))
+
+    assert solution["is_optimal"]
+    assert solution["objective_value"] == pytest.approx(5.0, abs=1e-4)

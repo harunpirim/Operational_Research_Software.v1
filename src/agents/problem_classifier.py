@@ -3,7 +3,6 @@ Problem Classifier - Uses AI to identify problem type and extract parameters
 Supports both Anthropic Claude and OpenAI models.
 """
 
-import os
 import re
 from typing import Dict, Any, Optional, List
 import json
@@ -219,7 +218,7 @@ class ProblemClassifier:
 
             result = self._parse_json(result_text)
 
-        except (json.JSONDecodeError, ValueError) as parse_err:
+        except (json.JSONDecodeError, ValueError):
             try:
                 retry_messages = messages + [
                     {"role": "assistant", "content": result_text},
@@ -474,7 +473,7 @@ Problem Description:
 {description}
 
 Return ONLY the JSON object, no additional text or markdown formatting.
-"""
+"""  # noqa: E501
         return prompt
 
     def get_problem_template(self, problem_type: str) -> Dict[str, Any]:

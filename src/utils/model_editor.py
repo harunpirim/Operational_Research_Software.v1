@@ -9,7 +9,7 @@ Provides the Python-side logic for the Model Playground tab:
 """
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import pulp
 import sympy
@@ -176,6 +176,14 @@ def latex_expr_to_coefficients(
         pass
 
     # --- Fallback: regex-based coefficient extraction ---
+    # Normalise MathLive output the regex can't read: explicit products
+    # (10\cdot x, 10\times x, 10*x) and numeric fractions (\frac{1}{2}x).
+    latex_str = re.sub(r"\\cdot|\\times|\*", " ", latex_str)
+    latex_str = re.sub(
+        r"\\[dt]?frac\s*\{\s*(\d+\.?\d*)\s*\}\s*\{\s*(\d+\.?\d*)\s*\}",
+        lambda m: repr(float(m.group(1)) / float(m.group(2))),
+        latex_str,
+    )
     for sname in variable_sympy_names:
         escaped = re.escape(sname)
         # Match patterns like "50 x_{foo}", "50x_{foo}", "-3.5 x_{foo}"

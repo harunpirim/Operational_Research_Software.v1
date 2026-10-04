@@ -8,7 +8,6 @@ Runs classify + build + solve and prints the answer.
 """
 
 import sys
-import os
 import time
 
 sys.path.insert(0, ".")
@@ -25,9 +24,9 @@ try:
     from src.agents.problem_classifier import ProblemClassifier
     from src.modeling.model_generator import ModelGenerator
     from src.solvers.solver_interface import SolverInterface
-    import pulp
+    import pulp  # noqa: F401  (dependency check)
 except ImportError as e:
-    print(f"\n  ERROR: Could not import required modules.")
+    print("\n  ERROR: Could not import required modules.")
     print(f"  Details: {e}")
     sys.exit(1)
 
@@ -157,7 +156,7 @@ try:
     nonzero = {k: v for k, v in vars_dict.items() if v is not None and abs(v) > 0.0001}
     zero = {k: v for k, v in vars_dict.items() if v is not None and abs(v) <= 0.0001}
 
-    print(f"\n  Active Variables (non-zero):")
+    print("\n  Active Variables (non-zero):")
     if nonzero:
         for name, val in list(nonzero.items())[:15]:
             print(f"    {name} = {val:.4f}")
@@ -173,7 +172,7 @@ try:
     total = time.time() - start_total
     print("\n" + "-" * 60)
     if solution.get("is_optimal"):
-        print(f"  RESULT: OPTIMAL SOLUTION FOUND")
+        print("  RESULT: OPTIMAL SOLUTION FOUND")
         print(f"  Objective Value = {obj:.4f}")
         print(f"  Total time      : {total:.1f}s")
     else:
@@ -181,7 +180,7 @@ try:
         for w in solution.get("warnings", []):
             print(f"  {w}")
         if not solution.get("warnings"):
-            print(f"  Check your constraints — they may contradict each other.")
+            print("  Check your constraints — they may contradict each other.")
     print("-" * 60 + "\n")
 
 except Exception as e:

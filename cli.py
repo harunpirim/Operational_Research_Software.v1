@@ -5,7 +5,6 @@ OR Assistant - Command Line Interface
 import click
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from dotenv import load_dotenv
 import os
 
@@ -22,69 +21,128 @@ def cli():
     pass
 
 
+_SOLVER_ALIASES = {
+    'pulp': 'pulp_cbc', 'cbc': 'pulp_cbc', 'ortools': 'pulp_cbc', 'or-tools': 'pulp_cbc',
+    'cvxpy': 'cvxpy_osqp', 'osqp': 'cvxpy_osqp', 'scip': 'cvxpy_scip', 'glpk': 'cvxpy_glpk',
+}
+
+
 @cli.command()
 @click.option('--problem', '-p', help='Problem description (or use --file)')
-@click.option('--file', '-f', type=click.Path(exists=True), help='Path to problem description file')
-@click.option('--solver', '-s', default='pulp', help='Solver to use (pulp, ortools, cvxpy)')
-@click.option('--output', '-o', type=click.Path(), help='Output file path')
-@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
-def solve(problem, file, solver, output, verbose):
+@click.option('--file', '-f', type=click.Path(exists=True),
+              help='Problem description text file, or an .mps/.mps.gz model')
+@click.option('--solver', '-s', default='auto', show_default=True,
+              help='auto, pulp_cbc, cvxpy_osqp, cvxpy_scip, cvxpy_glpk (aliases: pulp, cvxpy, scip, glpk)')
+@click.option('--time-limit', '-t', type=int, default=None, help='Solver time limit in seconds')
+@click.option('--output', '-o', type=click.Path(), help='Save the solution as JSON')
+@click.option('--verbose', '-v', is_flag=True, help='Show all variable values')
+def solve(problem, file, solver, time_limit, output, verbose):
     """Solve an optimization problem"""
-    
-    # Get problem description
-    if file:
-        with open(file, 'r') as f:
-            problem_text = f.read()
-    elif problem:
-        problem_text = problem
-    else:
+    from src.modeling.model_generator import ModelGenerator
+    from src.solvers.solver_interface import SolverInterface
+    from src.solvers.solver_router import resolve_solver
+
+    is_mps = bool(file) and file.lower().endswith(('.mps', '.mps.gz'))
+    if not (file or problem):
         console.print("[red]Error: Provide problem via --problem or --file[/red]")
-        return
-    
-    console.print(f"[bold blue]OR Assistant[/bold blue]")
-    console.print(f"[dim]Solving problem with {solver}...[/dim]\n")
-    
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console
-    ) as progress:
-        
-        # Step 1: Classify
-        task1 = progress.add_task("[cyan]Classifying problem...", total=None)
-        # TODO: Implement classification
-        progress.update(task1, completed=True)
-        
-        # Step 2: Model
-        task2 = progress.add_task("[cyan]Generating model...", total=None)
-        # TODO: Implement model generation
-        progress.update(task2, completed=True)
-        
-        # Step 3: Solve
-        task3 = progress.add_task("[cyan]Solving...", total=None)
-        # TODO: Implement solving
-        progress.update(task3, completed=True)
-        
-        # Step 4: Interpret
-        task4 = progress.add_task("[cyan]Interpreting results...", total=None)
-        # TODO: Implement interpretation
-        progress.update(task4, completed=True)
-    
-    console.print("\n[bold green]✓ Solution found![/bold green]\n")
-    
-    # Display results
+        raise SystemExit(1)
+
+    solver_key = _SOLVER_ALIASES.get(solver.lower(), solver.lower())
+    console.print("[bold blue]OR Assistant[/bold blue]\n")
+
+    try:
+        with console.status("[cyan]Building model...") as status:
+            generator = ModelGenerator()
+            if is_mps:
+                from src.ingestion.file_parser import FileParser
+                parsed = FileParser().parse(file, filename=os.path.basename(file))
+                parsed.setdefault('file_path', file)
+                pref = 'cvxpy' if solver_key.startswith('cvxpy') else 'pulp'
+                model, problem_data = generator.generate_from_mps(parsed, solver_preference=pref)
+            else:
+                from src.agents.problem_classifier import ProblemClassifier
+                problem_text = open(file).read() if file else problem
+                status.update("[cyan]Classifying problem...")
+                problem_data = ProblemClassifier().classify(problem_text)
+                console.print(
+                    f"Problem type: [cyan]{problem_data.get('problem_type')}[/cyan] "
+                    f"(confidence {problem_data.get('confidence', 0):.0%})"
+                )
+                status.update("[cyan]Generating model...")
+                pref = 'cvxpy' if solver_key.startswith('cvxpy') else 'pulp'
+                model = generator.generate(problem_data, solver_preference=pref)
+
+            resolved_key, explanation = resolve_solver(solver_key, problem_data)
+            console.print(f"[dim]{explanation}[/dim]")
+            status.update("[cyan]Solving...")
+            solution = SolverInterface(resolved_key, problem_data=problem_data).solve(
+                model, max_time=time_limit,
+            )
+
+            interpretation = None
+            if not is_mps:
+                status.update("[cyan]Interpreting results...")
+                try:
+                    from src.interpreters.result_interpreter import ResultInterpreter
+                    interpretation = ResultInterpreter().interpret(solution, problem_data)
+                except Exception as e:
+                    console.print(f"[yellow]Interpretation skipped: {e}[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise SystemExit(1)
+
+    ok = solution.get('is_optimal')
+    console.print(
+        f"\n[bold {'green' if ok else 'yellow'}]{'✓' if ok else '!'} "
+        f"{solution.get('status')}[/bold {'green' if ok else 'yellow'}]\n"
+    )
+
     table = Table(title="Solution Summary")
     table.add_column("Metric", style="cyan")
     table.add_column("Value", style="green")
-    
-    table.add_row("Objective Value", "$12,450")
-    table.add_row("Status", "Optimal")
-    table.add_row("Solve Time", "2.3s")
-    
+    obj = solution.get('objective_value')
+    table.add_row("Objective Value", f"{obj:,.4g}" if obj is not None else "N/A")
+    table.add_row("Status", str(solution.get('status')))
+    table.add_row("Solver", str(solution.get('solver_name')))
+    table.add_row("Variables / Constraints",
+                  f"{solution.get('num_variables')} / {solution.get('num_constraints')}")
+    table.add_row("Solve Time", f"{solution.get('solve_time', 0):.3f}s")
     console.print(table)
-    
+
+    variables = solution.get('variables') or {}
+    shown = variables if verbose else {
+        k: v for k, v in variables.items() if v is not None and abs(v) > 1e-9
+    }
+    if shown:
+        var_table = Table(title="Variables" if verbose else "Non-zero Variables")
+        var_table.add_column("Name", style="cyan")
+        var_table.add_column("Value", style="green", justify="right")
+        for name, value in list(shown.items())[:50]:
+            var_table.add_row(name, "—" if value is None else f"{value:,.4g}")
+        if len(shown) > 50:
+            var_table.caption = f"showing 50 of {len(shown)}"
+        console.print(var_table)
+
+    for w in solution.get('warnings') or []:
+        console.print(f"[yellow]⚠ {w}[/yellow]")
+    if solution.get('error_message'):
+        console.print(f"[red]{solution['error_message']}[/red]")
+
+    if interpretation and interpretation.get('summary'):
+        console.print(f"\n[bold]Interpretation[/bold]\n{interpretation['summary']}")
+        for finding in interpretation.get('key_findings') or []:
+            console.print(f"  • {finding}")
+
     if output:
+        from src.utils import save_results
+        save_results(
+            {'problem': problem_data, 'solution': solution, 'interpretation': interpretation},
+            output,
+        )
         console.print(f"\n[dim]Results saved to {output}[/dim]")
+
+    if not ok:
+        raise SystemExit(2)
 
 
 @cli.command()
@@ -139,12 +197,21 @@ def solvers():
     table.add_column("Type", style="yellow")
     table.add_column("Status", style="green")
     
-    # TODO: Actually check solver availability
-    table.add_row("PuLP", "LP/IP", "✓ Available")
-    table.add_row("OR-Tools", "Routing/CP", "✓ Available")
-    table.add_row("CVXPY", "Convex", "✓ Available")
-    table.add_row("Gurobi", "Commercial", "✗ Not configured")
-    
+    from src.solvers.solver_router import _get_available_solvers
+    from src.solvers.solver_interface import _cbc_runs
+
+    available = _get_available_solvers()
+    cbc = _cbc_runs()
+    rows = [
+        ("PuLP / CBC", "LP/MIP", cbc, "" if cbc else "falls back to HiGHS"),
+        ("CVXPY / OSQP", "LP/QP", 'cvxpy_osqp' in available, ""),
+        ("CVXPY / SCIP", "MIP", 'cvxpy_scip' in available, "pip install pyscipopt"),
+        ("CVXPY / GLPK", "MIP", 'cvxpy_glpk' in available, "pip install cvxopt"),
+    ]
+    for name, kind, ok, hint in rows:
+        status = "[green]✓ Available[/green]" if ok else f"[red]✗ Not available[/red] {hint}"
+        table.add_row(name, kind, status)
+
     console.print(table)
 
 

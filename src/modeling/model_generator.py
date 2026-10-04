@@ -1138,7 +1138,7 @@ class ModelGenerator:
                     raw_costs = [[float(x) for x in row] for row in raw_costs]
                 else:
                     raw_costs = [float(x) for x in raw_costs]
-            except (TypeError, ValueError, IndexError) as e:
+            except (TypeError, ValueError, IndexError):
                 # Costs might be None or empty, which is OK
                 pass
 
@@ -1409,6 +1409,7 @@ class ModelGenerator:
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0.3,
+            effort="medium",
         )
         raw = response["content"]
 
@@ -1422,6 +1423,9 @@ class ModelGenerator:
             exec(code, namespace)
 
             prob = namespace.get("prob")
+            # LLMs often wrap the model in a function despite the prompt.
+            if prob is None and callable(namespace.get("create_model")):
+                prob = namespace["create_model"]()
             if not isinstance(prob, pulp.LpProblem):
                 raise TypeError(
                     f"Expected namespace['prob'] to be pulp.LpProblem, "
@@ -1631,18 +1635,18 @@ class ModelGenerator:
         Build a model directly from the structured output of
         ``FileParser._parse_mps()``.
 
-        Tries CVXPY native MPS reading first (better solver support),
-        falling back to building a PuLP model from the parsed dict.
+        Builds a PuLP model from the parsed dict; ``SolverInterface``
+        converts it to CVXPY when a CVXPY solver is selected.
 
         Args:
             parsed_mps: Dict produced by ``FileParser.parse()`` with
                 ``type == 'mps'``.
-            solver_preference: ``'auto'`` (try CVXPY then PuLP),
-                ``'cvxpy'``, or ``'pulp'``.
+            solver_preference: kept for API compatibility; the model is
+                always built with PuLP.
 
         Returns:
-            ``(model, problem_data)`` — *model* is either a CVXPY dict
-            or a ``pulp.LpProblem``; *problem_data* is a classifier-
+            ``(model, problem_data)`` — *model* is a ``pulp.LpProblem``;
+            *problem_data* is a classifier-
             compatible dict for the rest of the pipeline.
         """
         file_path = parsed_mps.get("file_path")
@@ -1663,21 +1667,9 @@ class ModelGenerator:
         else:
             detected_type = "linear_programming"
 
-        # --- Try CVXPY first --------------------------------------------
-        model = None
-        used_cvxpy = False
-        best_solver = None
-
-        if solver_preference in ("auto", "cvxpy") and file_path:
-            try:
-                model, best_solver = self._build_mps_with_cvxpy(file_path)
-                used_cvxpy = True
-            except Exception as exc:
-                print(f"CVXPY MPS load failed: {exc}. Falling back to PuLP.")
-
-        # --- PuLP fallback ----------------------------------------------
-        if model is None:
-            model = self._build_mps_with_pulp(parsed_mps)
+        # CVXPY has no MPS reader; build a PuLP model, which SolverInterface
+        # converts to CVXPY when a CVXPY solver is selected.
+        model = self._build_mps_with_pulp(parsed_mps)
 
         # --- Build problem_data compatible with ResultInterpreter -------
         _obj_sense = parsed_mps.get("objective_sense", "minimize")
@@ -1694,8 +1686,7 @@ class ModelGenerator:
             "confidence": 1.0,
             "assumptions": [],
             "warnings": [
-                f"Loaded from MPS file. Solver path: "
-                f"{'CVXPY' if used_cvxpy else 'PuLP'}.",
+                "Loaded from MPS file.",
                 f"Detected type: {detected_type} ({n_binary} binary, "
                 f"{n_integer} integer, {n_continuous} continuous variables).",
             ],
@@ -1718,33 +1709,6 @@ class ModelGenerator:
         }
 
         return model, problem_data
-
-    @staticmethod
-    def _build_mps_with_cvxpy(mps_file_path: str):
-        """
-        Try to load an MPS file natively via CVXPY.
-
-        Returns ``(cvxpy_dict, solver_name)`` where *cvxpy_dict* has the
-        standard ``{'type': 'cvxpy', 'problem': ..., 'variables': ...}``
-        shape that ``SolverInterface`` understands.
-        """
-        import cvxpy as cp
-
-        available = cp.installed_solvers()
-        best_solver = None
-        for name in ("GUROBI", "CPLEX", "SCIP", "GLPK_MI", "CBC", "OSQP"):
-            if name in available:
-                best_solver = name
-                break
-
-        problem = cp.Problem.from_file(mps_file_path)
-
-        return {
-            "type": "cvxpy",
-            "problem": problem,
-            "variables": {},
-            "solver": best_solver,
-        }, best_solver
 
     @staticmethod
     def _build_mps_with_pulp(parsed_mps: Dict[str, Any]) -> pulp.LpProblem:
@@ -1849,7 +1813,7 @@ if __name__ == "__main__":
     print("\nModel validation:", validation)
 
     if validation["valid"]:
-        print(f"\n✓ Model successfully created!")
+        print("\n✓ Model successfully created!")
         print(f"  Variables: {validation['num_variables']}")
         print(f"  Constraints: {validation['num_constraints']}")
 

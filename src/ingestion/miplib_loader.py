@@ -3,7 +3,6 @@ MIPLIB Loader — download and parse real-world MIP benchmark instances
 from https://miplib.zib.de without manual setup.
 """
 
-import os
 import re
 import time
 from pathlib import Path

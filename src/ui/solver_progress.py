@@ -8,7 +8,6 @@ managing the formatting details.
 """
 
 import streamlit as st
-from datetime import datetime
 from typing import Dict, Any, Optional
 
 
@@ -178,7 +177,7 @@ def show_cached_result_banner(solution: Dict[str, Any]):
 
         dt = datetime.fromisoformat(cache_timestamp)
         cache_time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-    except:
+    except Exception:
         cache_time_str = str(cache_timestamp)
 
     # Format objective value

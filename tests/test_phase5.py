@@ -8,7 +8,6 @@ Runs the FULL pipeline: classify → model → solve → AI explanation.
 """
 
 import sys
-import os
 import time
 
 sys.path.insert(0, ".")
@@ -27,7 +26,7 @@ try:
     from src.solvers.solver_interface import SolverInterface
     from src.interpreters.result_interpreter import ResultInterpreter
 except ImportError as e:
-    print(f"\n  ERROR: Could not import required modules.")
+    print("\n  ERROR: Could not import required modules.")
     print(f"  Details: {e}")
     sys.exit(1)
 
@@ -119,13 +118,13 @@ print(f"  Total Time      : {total:.1f}s")
 vars_dict = solution.get("variables", {})
 nonzero = {k: v for k, v in vars_dict.items() if v is not None and abs(v) > 0.0001}
 if nonzero:
-    print(f"\n  Active Variables:")
+    print("\n  Active Variables:")
     for name, val in list(nonzero.items())[:10]:
         print(f"    {name} = {val:.4f}")
 
 summary = interpretation.get("summary", "")
 if summary:
-    print(f"\n  AI Summary:")
+    print("\n  AI Summary:")
     words = summary.split()
     line_buf, out = [], []
     for w in words:
@@ -140,26 +139,26 @@ if summary:
 
 findings = interpretation.get("key_findings", [])
 if findings:
-    print(f"\n  Key Findings:")
+    print("\n  Key Findings:")
     for f in findings:
         print(f"    * {f}")
 
 recs = interpretation.get("recommendations", [])
 if recs:
-    print(f"\n  Recommendations:")
+    print("\n  Recommendations:")
     for i, r in enumerate(recs, 1):
         print(f"    {i}. {r}")
 
 warnings = interpretation.get("warnings", [])
 if warnings:
-    print(f"\n  Warnings:")
+    print("\n  Warnings:")
     for w in warnings:
         print(f"    ! {w}")
 
 print("\n" + "=" * 60)
 if total < 30:
     print(f"  ALL STEPS PASSED — Pipeline done in {total:.1f}s")
-    print(f"  Ready to wire the UI in Phase 6.")
+    print("  Ready to wire the UI in Phase 6.")
 else:
     print(f"  WARNING: Took {total:.1f}s (over 30s target).")
 print("=" * 60 + "\n")

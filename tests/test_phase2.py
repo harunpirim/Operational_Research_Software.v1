@@ -8,7 +8,6 @@ The classifier will show you what it detected.
 """
 
 import sys
-import os
 
 sys.path.insert(0, ".")
 
@@ -23,8 +22,8 @@ except ImportError:
 try:
     from src.agents.problem_classifier import ProblemClassifier
 except ImportError as e:
-    print(f"\n  ERROR: Could not import ProblemClassifier.")
-    print(f"  Make sure you are running from the or-assistant folder.")
+    print("\n  ERROR: Could not import ProblemClassifier.")
+    print("  Make sure you are running from the or-assistant folder.")
     print(f"  Details: {e}")
     sys.exit(1)
 
@@ -77,21 +76,21 @@ try:
     # --- Confidence Explanation ---
     num_assumptions = len(result.get("assumptions", []))
     num_warnings = len(result.get("warnings", []))
-    print(f"\n  Confidence Breakdown:")
+    print("\n  Confidence Breakdown:")
     print(f"    The AI model rated its own confidence at {conf:.0%}.")
     print(
         f"    Factors: {num_assumptions} assumption(s) made, {num_warnings} warning(s) flagged."
     )
     if num_assumptions == 0 and num_warnings == 0:
-        print(f"    No assumptions or warnings — the problem was fully specified.")
+        print("    No assumptions or warnings — the problem was fully specified.")
     else:
         if num_assumptions > 0:
             print(
-                f"    More assumptions = more ambiguity in the input = lower confidence."
+                "    More assumptions = more ambiguity in the input = lower confidence."
             )
         if num_warnings > 0:
             print(
-                f"    Warnings indicate potential data issues that may affect accuracy."
+                "    Warnings indicate potential data issues that may affect accuracy."
             )
 
     variables = result.get("decision_variables", [])
@@ -116,7 +115,7 @@ try:
 
     warnings = result.get("warnings", [])
     if warnings:
-        print(f"\n  Warnings:")
+        print("\n  Warnings:")
         for w in warnings:
             print(f"    ! {w}")
 

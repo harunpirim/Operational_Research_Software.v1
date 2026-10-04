@@ -8,7 +8,6 @@ Shows the mathematical model that gets built.
 """
 
 import sys
-import os
 
 sys.path.insert(0, ".")
 
@@ -25,7 +24,7 @@ try:
     from src.modeling.model_generator import ModelGenerator
     import pulp
 except ImportError as e:
-    print(f"\n  ERROR: Could not import required modules.")
+    print("\n  ERROR: Could not import required modules.")
     print(f"  Details: {e}")
     sys.exit(1)
 
@@ -103,7 +102,7 @@ try:
         print(f"    ... and {len(constraints)-5} more")
 
     print("\n" + "-" * 60)
-    print(f"  RESULT: Model built successfully.")
+    print("  RESULT: Model built successfully.")
     print(f"  {len(variables)} variables, {len(constraints)} constraints.")
     print("-" * 60 + "\n")
 

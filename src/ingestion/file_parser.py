@@ -297,7 +297,8 @@ class FileParser:
         for lineno, raw_line in enumerate(lines, 1):
             line = raw_line.rstrip()
 
-            # FIX: strip inline comments and skip full-line comments (MPS uses $, \, * as comment chars)
+            # FIX: strip inline comments and skip full-line comments
+            # (MPS uses $, \, * as comment chars)
             for comment_char in ("$", "\\", "*"):
                 if comment_char in line:
                     line = line[: line.index(comment_char)].rstrip()
