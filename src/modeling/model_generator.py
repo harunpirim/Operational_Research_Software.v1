@@ -952,7 +952,10 @@ class ModelGenerator:
         if unmatched:
             raise ValueError(
                 f"Could not match {field} entries {unmatched!r} to any item. "
-                f"Known items: {item_names}"
+                f"Known items: {item_names}. "
+                "A forced item must also be one of the selectable items; if it is "
+                "a fixed commitment outside the item list, give its size as "
+                "'reserved_capacity' instead."
             )
         return resolved
 

@@ -464,8 +464,13 @@ Rules:
   * If the problem says some items are mandatory/required/must be done, list their
     names in "mandatory_items". If some are explicitly ruled out, list them in
     "forbidden_items". Never express these by silently omitting the item.
-  * Use "reserved_capacity" for capacity already consumed by fixed commitments
-    that are not themselves selectable items.
+  * Every name in "mandatory_items" and "forbidden_items" MUST also appear in
+    "item_names", with its own entry in "weights" and "values". A mandatory item
+    is still a selectable item that happens to be forced in.
+  * Use "reserved_capacity" ONLY for capacity consumed by a fixed commitment that
+    you are not listing as an item. Either list the commitment as an item and name
+    it in "mandatory_items", or exclude it from the item lists and put its size in
+    "reserved_capacity" — never both, and never one without the other.
   * If the mandatory items alone exceed the capacity, still report them faithfully
     and add a warning — do NOT relax the requirement to make the model solvable.
 - "assumptions": one entry per inference you made about data NOT explicitly stated.

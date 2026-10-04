@@ -1,0 +1,21 @@
+I have 300 minutes of focus time available for the day.
+
+Attending the Mapua University OR conference session is mandatory and takes
+40 minutes, so it must be included.
+
+The other 7 tasks are optional and each is all-or-nothing. Their durations and
+societal impact scores are:
+
+T1  Sign off student IRB amendment   15 minutes   impact 40.00
+T2  Referee report                   40 minutes   impact 15.00
+T3  Grant budget justification       45 minutes   impact 13.33
+T4  PhD advisee 1-on-1               50 minutes   impact 12.00
+T5  Lecture prep                     60 minutes   impact 10.00
+T6  Debug solver data pipeline      100 minutes   impact  6.00
+T7  Manuscript revision             120 minutes   impact  5.00
+
+Societal contribution is inversely proportional to duration, so impact equals
+600 divided by the task duration. The mandatory conference session has impact 0.
+
+Maximize total societal impact subject to the total duration of the mandatory
+session plus all selected tasks being at most 300 minutes.
