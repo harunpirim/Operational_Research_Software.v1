@@ -461,6 +461,13 @@ Rules:
   * Use "values" or "returns" for item values/profits
   * Use "item_names" or "project_names" for item identifiers
   * For investment knapsack: prefer "budget", "costs", "returns", "project_names"
+  * If the problem says some items are mandatory/required/must be done, list their
+    names in "mandatory_items". If some are explicitly ruled out, list them in
+    "forbidden_items". Never express these by silently omitting the item.
+  * Use "reserved_capacity" for capacity already consumed by fixed commitments
+    that are not themselves selectable items.
+  * If the mandatory items alone exceed the capacity, still report them faithfully
+    and add a warning — do NOT relax the requirement to make the model solvable.
 - "assumptions": one entry per inference you made about data NOT explicitly stated.
   Each needs: assumption (string), confidence (0.0–1.0), impact ("high"/"medium"/"low"),
   and field (the JSON key path this assumption affects, e.g. "parameters.demand").

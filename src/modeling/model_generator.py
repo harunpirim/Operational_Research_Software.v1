@@ -11,6 +11,20 @@ import json
 from src.utils.api_client import APIClient
 
 
+class InfeasibleModelError(ValueError):
+    """
+    Raised when a model is provably infeasible before any solve is attempted.
+
+    Subclasses ``ValueError`` so existing callers that catch ``ValueError``
+    keep working. ``diagnosis`` carries the structured numbers behind the
+    message so a UI can render them without re-parsing the string.
+    """
+
+    def __init__(self, message: str, diagnosis: Optional[Dict[str, Any]] = None):
+        super().__init__(message)
+        self.diagnosis = diagnosis or {}
+
+
 class ModelGenerator:
     """
     Generates mathematical optimization models from structured problem data.
@@ -863,6 +877,187 @@ class ModelGenerator:
             "item_names": item_names,
         }
 
+    _MANDATORY_KEYS = (
+        "mandatory_items",
+        "required_items",
+        "must_include",
+        "forced_items",
+        "forced_in",
+        "fixed_items",
+        "mandatory",
+    )
+
+    _FORBIDDEN_KEYS = (
+        "forbidden_items",
+        "excluded_items",
+        "must_exclude",
+        "forced_out",
+        "prohibited_items",
+    )
+
+    _RESERVED_KEYS = (
+        "reserved_capacity",
+        "committed_capacity",
+        "fixed_usage",
+        "mandatory_weight",
+        "preallocated_capacity",
+    )
+
+    @staticmethod
+    def _resolve_item_refs(
+        refs: Any,
+        item_names: List[str],
+        n: int,
+        field: str,
+    ) -> set:
+        """
+        Turn a list of item references into a set of 0-based indices.
+
+        Accepts item names (case-insensitive), 0-based indices, or a boolean
+        mask of length ``n``. Raises ``ValueError`` on references that cannot
+        be matched, so a bad reference fails loudly instead of being dropped.
+        """
+        if refs is None:
+            return set()
+        if not isinstance(refs, (list, tuple, set)):
+            refs = [refs]
+        refs = list(refs)
+        if not refs:
+            return set()
+
+        # Boolean mask covering every item.
+        if len(refs) == n and all(isinstance(r, bool) for r in refs):
+            return {i for i, flag in enumerate(refs) if flag}
+
+        lookup = {name.strip().lower(): i for i, name in enumerate(item_names)}
+        resolved, unmatched = set(), []
+        for ref in refs:
+            if isinstance(ref, bool):
+                unmatched.append(ref)
+            elif isinstance(ref, (int, float)) and float(ref).is_integer():
+                idx = int(ref)
+                if 0 <= idx < n:
+                    resolved.add(idx)
+                else:
+                    unmatched.append(ref)
+            elif isinstance(ref, str):
+                key = ref.strip().lower()
+                if key in lookup:
+                    resolved.add(lookup[key])
+                else:
+                    unmatched.append(ref)
+            else:
+                unmatched.append(ref)
+
+        if unmatched:
+            raise ValueError(
+                f"Could not match {field} entries {unmatched!r} to any item. "
+                f"Known items: {item_names}"
+            )
+        return resolved
+
+    def _extract_item_restrictions(
+        self,
+        problem_data: Dict[str, Any],
+        item_names: List[str],
+        n: int,
+    ) -> Dict[str, Any]:
+        """
+        Pull 'must include' / 'must exclude' / reserved-capacity data out of
+        the classifier output. Absent keys simply yield empty restrictions.
+        """
+        search_dicts = [problem_data.get("parameters", {}), problem_data]
+
+        def _first(keys):
+            for d in search_dicts:
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        return d[k]
+            return None
+
+        mandatory = self._resolve_item_refs(
+            _first(self._MANDATORY_KEYS), item_names, n, "mandatory_items"
+        )
+        forbidden = self._resolve_item_refs(
+            _first(self._FORBIDDEN_KEYS), item_names, n, "forbidden_items"
+        )
+
+        overlap = mandatory & forbidden
+        if overlap:
+            names = sorted(item_names[i] for i in overlap)
+            raise InfeasibleModelError(
+                "Model is infeasible as stated: "
+                f"{', '.join(names)} listed as both required and excluded.",
+                {"reason": "conflicting_restrictions", "items": names},
+            )
+
+        reserved = _first(self._RESERVED_KEYS)
+        reserved = (
+            float(reserved)
+            if isinstance(reserved, (int, float)) and not isinstance(reserved, bool)
+            else 0.0
+        )
+
+        return {
+            "mandatory": mandatory,
+            "forbidden": forbidden,
+            "reserved_capacity": reserved,
+        }
+
+    @staticmethod
+    def _diagnose_capacity(
+        required: float,
+        capacity: float,
+        mandatory: set,
+        weights: List[float],
+        item_names: List[str],
+        reserved: float,
+    ) -> InfeasibleModelError:
+        """
+        Build an actionable infeasibility message for an over-capacity model:
+        by how much it overruns, and the fewest forced items to release.
+        """
+        over = required - capacity
+        lines = [
+            (
+                "Model is infeasible as stated: items that must be included need "
+                f"{required:g} capacity but only {capacity:g} is available "
+                f"(over by {over:g})."
+            )
+        ]
+        if reserved:
+            lines.append(f"Reserved capacity not available to items: {reserved:g}.")
+
+        forced = sorted(mandatory, key=lambda i: weights[i], reverse=True)
+        if forced:
+            listed = ", ".join(f"{item_names[i]} ({weights[i]:g})" for i in forced)
+            lines.append(f"Required items ({len(forced)}): {listed}.")
+
+            freed, dropped = 0.0, []
+            for i in forced:
+                if required - freed <= capacity:
+                    break
+                freed += weights[i]
+                dropped.append(item_names[i])
+            if dropped and required - freed <= capacity:
+                lines.append(
+                    f"Smallest relaxation: release {len(dropped)} item(s) "
+                    f"({', '.join(dropped)}) to fit."
+                )
+
+        lines.append(f"Alternatively raise capacity to at least {required:g}.")
+        return InfeasibleModelError(
+            " ".join(lines),
+            {
+                "reason": "mandatory_exceeds_capacity",
+                "required": required,
+                "capacity": capacity,
+                "overage": over,
+                "reserved_capacity": reserved,
+                "mandatory_items": [item_names[i] for i in forced],
+            },
+        )
+
     def _extract_assignment_data(
         self,
         problem_data: Dict[str, Any],
@@ -1355,6 +1550,19 @@ class ModelGenerator:
 
         n = len(weights)
 
+        restrictions = self._extract_item_restrictions(problem_data, item_names, n)
+        mandatory = restrictions["mandatory"]
+        forbidden = restrictions["forbidden"]
+        reserved = restrictions["reserved_capacity"]
+
+        # Prove infeasibility before building a model the solver would either
+        # reject or, worse, silently satisfy by ignoring the requirement.
+        required = reserved + sum(weights[i] for i in mandatory)
+        if required > capacity:
+            raise self._diagnose_capacity(
+                required, capacity, mandatory, weights, item_names, reserved
+            )
+
         sense = (
             pulp.LpMaximize
             if problem_data.get("objective", "maximize") == "maximize"
@@ -1367,9 +1575,14 @@ class ModelGenerator:
         prob += pulp.lpSum(values[i] * x[i] for i in range(n)), "Total_Value"
 
         prob += (
-            pulp.lpSum(weights[i] * x[i] for i in range(n)) <= capacity,
+            pulp.lpSum(weights[i] * x[i] for i in range(n)) <= capacity - reserved,
             "Weight_Limit",
         )
+
+        for i in sorted(mandatory):
+            prob += x[i] == 1, f"Must_Include_{i}"
+        for i in sorted(forbidden):
+            prob += x[i] == 0, f"Must_Exclude_{i}"
 
         return prob
 
