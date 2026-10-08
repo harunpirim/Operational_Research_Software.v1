@@ -6,6 +6,7 @@ plain text (.txt), PDF, and MPS (.mps/.mps.gz).
 """
 
 import gzip
+import re
 import hashlib
 import io
 import warnings
@@ -302,6 +303,17 @@ class FileParser:
 
         for lineno, raw_line in enumerate(lines, 1):
             line = raw_line.rstrip()
+
+            # PuLP writes the objective sense only as a comment ("*SENSE:Maximize");
+            # read it here, since the comment stripping below discards it.
+            sense_comment = re.match(r"\*\s*SENSE\s*:\s*(MAX|MIN)", line.strip(), re.I)
+            if sense_comment:
+                objective_sense = (
+                    "maximize"
+                    if sense_comment.group(1).upper() == "MAX"
+                    else "minimize"
+                )
+                continue
 
             # FIX: strip inline comments and skip full-line comments
             # (MPS uses $, \, * as comment chars)
